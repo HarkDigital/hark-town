@@ -225,6 +225,31 @@ export class Post {
     Object.assign(this.params, POST_DEFAULTS)
   }
 
+  /**
+   * Compile every post-processing shader in parallel (KHR_parallel_shader_compile)
+   * so the first composer render doesn't block on ~16 synchronous links.
+   */
+  compileAsync(): Promise<unknown> {
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2))
+    const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    const b = this.bloom as unknown as Record<string, unknown>
+    const mats: THREE.Material[] = []
+    const add = (m: unknown) => {
+      if (m && (m as THREE.Material).isMaterial) mats.push(m as THREE.Material)
+    }
+    for (const pass of this.composer.passes) add((pass as unknown as { material?: unknown }).material)
+    for (const m of (b.separableBlurMaterials as unknown[]) ?? []) add(m)
+    add(b.compositeMaterial)
+    add(b.blendMaterial)
+    add(b.materialHighPassFilter)
+    add(b.copyMaterial)
+    const jobs = mats.map(m => {
+      const mesh = new THREE.Mesh(quad.geometry, m)
+      return this.renderer.compileAsync(mesh, cam).catch(() => {})
+    })
+    return Promise.all(jobs)
+  }
+
   setSize(w: number, h: number, dpr: number) {
     this.composer.setPixelRatio(dpr)
     this.composer.setSize(w, h)

@@ -260,7 +260,20 @@ a {
 .hud-h2 em {
   font-style: italic;
   font-weight: 560;
-  color: #0a8f55;
+  color: #07784a;
+}
+/* a soft sky-coloured halo keeps headlines legible over clouds, islets and props */
+.hud-title,
+.hud-h2 {
+  text-shadow:
+    0 0 18px rgba(233, 242, 244, 0.85),
+    0 0 4px rgba(233, 242, 244, 0.7);
+}
+.is-dark .hud-title,
+.is-dark .hud-h2 {
+  text-shadow:
+    0 0 22px rgba(14, 18, 26, 0.7),
+    0 2px 6px rgba(14, 18, 26, 0.55);
 }
 .is-dark .hud-title em,
 .is-dark .hud-h2 em {

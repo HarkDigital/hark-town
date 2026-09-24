@@ -5,6 +5,7 @@ import { Assets } from './assets'
 import { World } from '../world/World'
 import { clamp, damp } from './math'
 import { buildChapterCopy } from './srContent'
+import { nextFrame } from './yield'
 import type { CameraPose, Chapter, ChapterContext, ChapterDef, Frame } from './types'
 
 export interface ChapterSlot {
@@ -28,33 +29,9 @@ export interface EngineState {
 }
 
 /** Scroll distance (in vh) on each side of a cut where the glitch ramps. */
-const CUT_WINDOW = 0.22
+const CUT_WINDOW = 0.18
 /** Render-pixel budget: 4K/5K windows would otherwise push 15+ MP through bloom. */
 const PIXEL_BUDGET = 6e6
-
-/**
- * Yield to the browser between heavy boot steps so the loader can paint.
- * rAF never fires in a hidden/background tab, so there we yield with a
- * macrotask instead (and a timeout guards a tab hidden mid-wait).
- */
-const nextFrame = () =>
-  new Promise<void>(resolve => {
-    let done = false
-    const r = () => {
-      if (!done) {
-        done = true
-        resolve()
-      }
-    }
-    if (document.hidden) {
-      const ch = new MessageChannel()
-      ch.port1.onmessage = r
-      ch.port2.postMessage(0)
-      return
-    }
-    requestAnimationFrame(r)
-    setTimeout(r, 150)
-  })
 
 function emptyChapter(id: string): Chapter {
   return {
@@ -192,8 +169,34 @@ export class Engine {
 
     // A lost context takes every baked texture/PMREM with it; a reload is the
     // only honest recovery.
-    canvas.addEventListener('webglcontextlost', e => e.preventDefault())
-    canvas.addEventListener('webglcontextrestored', () => location.reload())
+    let lostTimer = 0
+    canvas.addEventListener('webglcontextlost', e => {
+      e.preventDefault()
+      // if the GPU never gives the context back, reload once rather than
+      // leave an empty sky with floating labels
+      lostTimer = window.setTimeout(() => {
+        try {
+          if (sessionStorage.getItem('hark:ctx-reload')) return
+          sessionStorage.setItem('hark:ctx-reload', '1')
+        } catch {
+          /* storage blocked */
+        }
+        location.reload()
+      }, 3000)
+    })
+    canvas.addEventListener('webglcontextrestored', () => {
+      window.clearTimeout(lostTimer)
+      location.reload()
+    })
+
+    // Scrolling by wheel/touch after focusing an item stop in the copy layer
+    // would leave a stale focus pill on screen — drop that focus.
+    const dropCopyFocus = () => {
+      const a = document.activeElement as HTMLElement | null
+      if (a && a.closest('.sr-copy')) a.blur()
+    }
+    window.addEventListener('wheel', dropCopyFocus, { passive: true })
+    window.addEventListener('touchmove', dropCopyFocus, { passive: true })
   }
 
   /** Is WebGL2 available at all? */
@@ -337,13 +340,21 @@ export class Engine {
       for (const l of [0.5, 0.04, 0.92]) {
         try {
           slot.chapter.update(l, this.frame, slot.ctx)
-          compiles.push(this.renderer.compileAsync(slot.chapter.group, this.camera, this.scene).catch(() => {}))
+          // compile against this chapter's lights only: take the group out of the
+          // scene (three gathers lights from both the scene and the object)
+          const g = slot.chapter.group
+          const probe = new THREE.Group()
+          this.scene.remove(g)
+          probe.add(g, this.world.object)
+          compiles.push(this.renderer.compileAsync(probe, this.camera, this.scene).catch(() => {}))
+          this.scene.add(g, this.world.object)
         } catch (err) {
           console.error(`[hark] chapter "${slot.def.id}" failed during compile`, err)
         }
       }
     }
     for (const slot of this.slots) slot.chapter.group.visible = false
+    compiles.push(this.post.compileAsync())
     await Promise.all(compiles)
     await nextFrame()
 
