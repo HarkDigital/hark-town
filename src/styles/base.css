@@ -1,0 +1,569 @@
+/* ------------------------------------------------------------------
+   Hark · Town — base tokens, layout and the shared HUD vocabulary.
+   A sunny miniature world: soft clay colours, friendly wayfinding
+   signage (rounded plates, pill tags, map pins), a soft wonky serif
+   for headlines (Fraunces), Figtree for reading, Space Mono for labels.
+   Brand signal green marks everything Hark.
+   Stages that sit on a dark scene (dusk, storm) can add `.is-dark`.
+   ------------------------------------------------------------------ */
+
+:root {
+  --sky: #e9f2f4;
+  --paper: #fbfaf6;
+  --cream: #f6f1e7;
+  --ink: #1d2321;
+  --slate: #4b5563;
+  --signal: #00e27a;
+  --signal-bright: #00ff85;
+  --clay: #d9774b;
+  --mustard: #f0b43c;
+  --leaf: #46b36b;
+
+  --fg: var(--ink);
+  --fg-muted: rgba(29, 35, 33, 0.74);
+  --fg-faint: rgba(29, 35, 33, 0.64);
+  --line: rgba(29, 35, 33, 0.14);
+  --line-strong: rgba(29, 35, 33, 0.32);
+  --plate: rgba(251, 250, 246, 0.9);
+  --shadow: 0 10px 30px rgba(38, 56, 72, 0.16), 0 2px 6px rgba(38, 56, 72, 0.1);
+
+  --font-display: 'Fraunces Variable', 'Fraunces', Georgia, serif;
+  --font-sans: 'Figtree Variable', 'Figtree', system-ui, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+
+  --gutter: max(clamp(16px, 3.4vw, 48px), env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+  --safe-top: calc(clamp(80px, 10.5vh, 112px) + env(safe-area-inset-top, 0px));
+  --safe-bottom: calc(clamp(82px, 10.5vh, 110px) + env(safe-area-inset-bottom, 0px));
+
+  color-scheme: light;
+}
+
+.is-dark {
+  --fg: var(--paper);
+  --fg-muted: rgba(251, 250, 246, 0.84);
+  --fg-faint: rgba(251, 250, 246, 0.7);
+  --line: rgba(251, 250, 246, 0.2);
+  --line-strong: rgba(251, 250, 246, 0.42);
+  --plate: rgba(29, 35, 33, 0.72);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--sky);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  overflow-x: clip;
+}
+@supports not (overflow: clip) {
+  body {
+    overflow-x: hidden;
+  }
+}
+
+html {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  display: none;
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+::selection {
+  background: var(--signal);
+  color: var(--ink);
+}
+
+a {
+  color: inherit;
+}
+
+#gl {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  display: block;
+  z-index: 0;
+}
+
+#track {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+#track:focus {
+  outline: none;
+}
+#track:focus-within {
+  z-index: 30;
+}
+.chapter {
+  position: relative;
+  width: 100%;
+}
+
+#stages {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+  color: var(--fg);
+}
+.stage.is-active {
+  visibility: visible;
+}
+.stage:not(.is-active),
+.stage:not(.is-active) * {
+  visibility: hidden !important;
+}
+.stage a,
+.stage button,
+.stage .hud-interactive {
+  pointer-events: auto;
+}
+
+#chrome {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+#chrome a,
+#chrome button,
+#chrome .hud-interactive {
+  pointer-events: auto;
+}
+
+#loader {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.is-dark :focus-visible {
+  outline-color: var(--paper-2);
+}
+
+/* ---------------- HUD vocabulary ---------------- */
+
+/* small mono label */
+.hud-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+/* eyebrow = a little map pin + place name */
+.hud-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg);
+  margin: 0;
+}
+.hud-eyebrow::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg) translate(1px, -1px);
+  background: var(--signal);
+  box-shadow: inset 0 0 0 3.5px var(--signal), inset 0 0 0 6px var(--paper);
+}
+
+/* headline: soft wonky serif; <em> = the Hark-green word */
+.hud-title {
+  font-family: var(--font-display);
+  font-weight: 640;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1, 'opsz' 144;
+  letter-spacing: -0.035em;
+  line-height: 0.92;
+  font-size: clamp(3rem, 8.4vw, 8.6rem);
+  margin: 0;
+  color: var(--fg);
+  text-wrap: balance;
+}
+.hud-h2 {
+  font-family: var(--font-display);
+  font-weight: 620;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1, 'opsz' 110;
+  letter-spacing: -0.03em;
+  line-height: 0.96;
+  font-size: clamp(2.1rem, 4.8vw, 4.6rem);
+  margin: 0;
+  color: var(--fg);
+  text-wrap: balance;
+}
+.hud-title em,
+.hud-h2 em {
+  font-style: italic;
+  font-weight: 560;
+  color: #0a8f55;
+}
+.is-dark .hud-title em,
+.is-dark .hud-h2 em {
+  color: var(--signal-bright);
+}
+
+.hud-body {
+  font-family: var(--font-sans);
+  font-size: clamp(15px, 1.15vw, 17.5px);
+  font-weight: 450;
+  line-height: 1.55;
+  color: var(--fg-muted);
+  max-width: 40ch;
+  margin: 0;
+}
+
+.hud-quote {
+  font-family: var(--font-display);
+  font-weight: 480;
+  font-variation-settings: 'SOFT' 100, 'WONK' 0, 'opsz' 72;
+  font-size: clamp(1.4rem, 2.6vw, 2.5rem);
+  line-height: 1.16;
+  letter-spacing: -0.015em;
+  color: var(--fg);
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.hud-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hud-tag {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(29, 35, 33, 0.06);
+  border: 1px solid var(--line);
+}
+.is-dark .hud-tag {
+  background: rgba(251, 250, 246, 0.08);
+}
+
+/* chunky friendly button */
+.hud-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--signal);
+  padding: 13px 22px;
+  border-radius: 999px;
+  border: 0;
+  box-shadow: 0 4px 0 #07a85d, var(--shadow);
+  cursor: pointer;
+  transition:
+    transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1),
+    box-shadow 0.18s ease;
+}
+.hud-btn:hover,
+.hud-btn:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #07a85d, var(--shadow);
+}
+.hud-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #07a85d, var(--shadow);
+}
+.hud-btn--ghost {
+  background: var(--paper);
+  box-shadow: 0 4px 0 rgba(29, 35, 33, 0.18), var(--shadow);
+}
+.hud-btn--ghost:hover,
+.hud-btn--ghost:focus-visible {
+  box-shadow: 0 6px 0 rgba(29, 35, 33, 0.18), var(--shadow);
+}
+
+/* wayfinding plate */
+.hud-panel {
+  position: relative;
+  padding: 20px 22px;
+  background: var(--plate);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.hud-rule {
+  height: 1px;
+  border: 0;
+  background: var(--line);
+  margin: 14px 0;
+}
+
+.hud-mono {
+  font-family: var(--font-mono);
+}
+
+/* ---------------- 3D-anchored callouts (src/core/dom.ts) ---------------- */
+
+.callout {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: opacity;
+}
+.callout-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.callout-svg path {
+  fill: none;
+  stroke: var(--fg);
+  stroke-opacity: 0.5;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1 5;
+}
+.callout-dot {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 3px var(--paper), var(--shadow);
+}
+.callout-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 4px 11px;
+  box-shadow: var(--shadow);
+  line-height: 1.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .rise .rise-w > span {
+    transition-delay: 0s !important;
+  }
+}
+
+/* ---------------- word pop reveal (src/core/dom.ts rise/setRise) ----------------
+   Words POP up like toy blocks: rise from below with a springy overshoot. */
+.rise .rise-w {
+  display: inline-block;
+  vertical-align: top;
+  visibility: hidden;
+  transition: visibility 0s linear 0.3s;
+}
+.rise.is-in .rise-w {
+  visibility: visible;
+  transition-delay: 0s;
+}
+.rise .rise-w > span {
+  display: inline-block;
+  opacity: 0;
+  transform: translate3d(0, 0.45em, 0) scale(0.6);
+  transform-origin: 50% 100%;
+  transition:
+    transform 0.55s cubic-bezier(0.34, 1.7, 0.5, 1),
+    opacity 0.2s ease;
+  transition-delay: calc(var(--i, 0) * 40ms);
+}
+.rise.is-in .rise-w > span {
+  opacity: 1;
+  transform: none;
+}
+.rise:not(.is-in) .rise-w > span {
+  transition-duration: 0.22s, 0.18s;
+  transition-delay: 0s;
+}
+
+/* ---------------- accessible copy layer (src/core/srContent.ts) ---------------- */
+
+.sr-copy {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  color: transparent;
+}
+.sr-copy :is(a, button) {
+  pointer-events: auto;
+}
+.sr-copy :is(a, button):focus {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 8px);
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: calc(100vw - 2 * var(--gutter));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--signal);
+  padding: 12px 18px;
+  border-radius: 999px;
+  box-shadow: 0 4px 0 #07a85d, var(--shadow);
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.sr-copy :is(a, button):focus .sr-note {
+  display: none;
+}
+.sr-copy :is(h1, h2):focus {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 8px);
+  transform: translateX(-50%);
+  z-index: 40;
+  margin: 0;
+  white-space: nowrap;
+  font: 500 12px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--paper-2);
+  padding: 12px 18px;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  outline: none;
+}
+.sr-copy [data-copy-status]:not(:empty) {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 64px);
+  transform: translateX(-50%);
+  z-index: 40;
+  font: 500 12px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--signal);
+  padding: 10px 16px;
+  border: 2px solid var(--ink);
+}
+.sr-note {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  z-index: 120;
+  transform: translate(-50%, -160%);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--signal);
+  padding: 10px 16px;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  transition: transform 0.2s ease;
+}
+.skip-link:focus {
+  transform: translate(-50%, 0);
+  outline: none;
+}
