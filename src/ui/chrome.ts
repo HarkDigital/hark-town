@@ -22,7 +22,7 @@ import { balloonSvg, cloudSvg, miniIslandSvg } from './art'
  *   bottom-right  the ISLAND MINIMAP: seven tiny floating islands joined by a
  *                 dotted flight path, a green hot-air balloon riding it by
  *                 scroll progress, the current stop lit in green, the readout
- *                 "Stop 03 / 07 — The Works · Services" and a tiny clock that
+ *                 "Island 03 / 07 — The Works · Services" and a tiny clock that
  *                 follows the sun (world time). Islands are buttons. Phones
  *                 get a compact readout instead.
  *
@@ -321,7 +321,7 @@ export function createChrome(root: HTMLElement, engine: Engine, sound: Sound) {
     if (cueIndex < 0) return
     cueIndex = -1
     chrome.classList.remove('is-cue')
-    keyEl.textContent = 'Stop'
+    keyEl.textContent = 'Island'
     if (lastIndex >= 0) showStop(lastIndex)
   }
   isleEls.forEach((b, i) => {
