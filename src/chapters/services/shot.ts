@@ -12,7 +12,7 @@ import { ACROSS, DEEP } from './layout'
  */
 
 export interface Shot {
-  /** framed centre */
+  /** framed center */
   cx: number
   cy: number
   cz: number

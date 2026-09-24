@@ -105,7 +105,7 @@ const FinalShader = {
         float n = fbm(q) + 0.25 * fbm(q * 2.7 - uTime * 0.08);
         // clouds roll in from the sides toward the middle as t rises
         float edge = abs(uv.x - 0.5) * 1.1;
-        float cover = t * 1.55 - 0.35 + edge * (1.0 - t) * 0.9;
+        float cover = t * 1.55 - 0.35 + edge * (1.0 - t) * 0.9 * smoothstep(0.0, 0.12, t);
         float cl = smoothstep(0.62 - cover, 0.8 - cover, n);
         float shade = 0.9 + 0.1 * smoothstep(0.3, 0.9, fbm(q + vec2(0.0, 0.35)));
         vec3 cloud = uCloud * shade;

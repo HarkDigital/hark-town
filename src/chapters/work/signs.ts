@@ -109,7 +109,7 @@ export class Signage {
   signsTex: THREE.CanvasTexture
   stallsTex: THREE.CanvasTexture
   postersTex: THREE.CanvasTexture
-  private posterImgs: (HTMLImageElement | null)[]
+  private posterImgs: (ImageBitmap | HTMLImageElement | null)[]
 
   constructor(
     private featured: WorkItem[],
@@ -316,8 +316,8 @@ export class Signage {
     this.postersTex.needsUpdate = true
   }
 
-  /** A sidewalk-board thumbnail arrived. */
-  poster(j: number, img: HTMLImageElement) {
+  /** A sidewalk-board thumbnail arrived (ideally a pre-sized, pre-decoded ImageBitmap). */
+  poster(j: number, img: ImageBitmap | HTMLImageElement) {
     this.posterImgs[j] = img
     const g = this.posters.getContext('2d')!
     const c = posterCell(j)

@@ -8,7 +8,8 @@ import { Town } from './town'
 import { Storm } from './storm'
 import { Dome } from './dome'
 import { Glints, Rainbow } from './clear'
-import { fract, hash1, nextFrame, pop } from './util'
+import { nextFrame } from '../../core/yield'
+import { fract, hash1, pop } from './util'
 import './shield.css'
 
 /*
@@ -65,11 +66,13 @@ export default function create(): Chapter {
 
   // DOM
   let stage: HTMLElement
+  let shd: HTMLElement
   let copy: HTMLElement
   let probe: HTMLElement
   let eyebrow: HTMLElement
   let t1: HTMLElement
   let t2: HTMLElement
+  let title: HTMLElement
   let bodyCard: HTMLElement
   let watchCard: HTMLElement
   let alert: Callout
@@ -78,6 +81,8 @@ export default function create(): Chapter {
 
   // framing (recomputed on resize)
   const fit = { w: 0, h: 0, d: 60, sx: 0, sy: 0, el: 0.58, portrait: false, focusY: 0.5, band: 0.2 }
+  /** the copy column in NDC (y up), published as world.params.keepOut */
+  const keep = { x0: -1, y0: -1, x1: -1, y1: -1 }
   const scratch = new THREE.PerspectiveCamera(FOV, 1, 0.5, 400)
   const pose: CameraPose = { position: new THREE.Vector3(), target: new THREE.Vector3(), fov: FOV, roll: 0, parallax: 0 }
   const tmpPose: CameraPose = { position: new THREE.Vector3(), target: new THREE.Vector3(), fov: FOV, roll: 0, parallax: 0 }
@@ -152,11 +157,17 @@ export default function create(): Chapter {
     fit.sx = (rx0 + rx1) / 2 - (minX + maxX) / 2 / k
     fit.sy = (ry0 + ry1) / 2 - (minY + maxY) / 2 / k
     // tilt-shift band: centred on the town, wide enough to hold it
-    computePose(0.5, 0, tmpPose)
+    computePose(0.5, 0, tmpPose, true)
     applyScratch(tmpPose)
     _a.set(0, G + 0.6, 0).project(scratch)
     fit.focusY = clamp(_a.y * 0.5 + 0.5, 0.15, 0.85)
     fit.band = fit.portrait ? 0.13 : 0.19
+    // the copy column, padded a little, in NDC
+    const pad = 16
+    keep.x0 = ((cr.left - pad) / w) * 2 - 1
+    keep.x1 = ((cr.right + pad) / w) * 2 - 1
+    keep.y0 = 1 - ((cr.bottom + pad) / h) * 2
+    keep.y1 = 1 - ((cr.top - pad) / h) * 2
   }
 
   function applyScratch(p: CameraPose) {
@@ -165,10 +176,15 @@ export default function create(): Chapter {
     scratch.updateMatrixWorld(true)
   }
 
-  function computePose(local: number, time: number, out: CameraPose) {
+  /**
+   * Camera for this local. `still` (reduced motion) drops the idle drift and
+   * the dome-pop bump so the camera only ever moves with the scroll.
+   */
+  function computePose(local: number, time: number, out: CameraPose, still = false) {
     const inB = 1 - ease.outCubic(segment(local, 0, 0.12))
     const outB = ease.inCubic(segment(local, T.out[0], 1))
-    const az = lerp(-0.36, 0.24, ease.inOutQuad(local)) + Math.sin(time * 0.07) * 0.015
+    const drift = still ? 0 : Math.sin(time * 0.07) * 0.015
+    const az = lerp(-0.36, 0.24, ease.inOutQuad(local)) + drift
     const el = fit.el + inB * 0.32 - outB * 0.28
     // gentle push-in through the storm, ease back out for the rainbow
     const push = 1 - 0.05 * window01(local, 0.12, 0.62, 0.2)
@@ -186,9 +202,10 @@ export default function create(): Chapter {
     const shift = right.multiplyScalar(-fit.sx * hw).addScaledVector(camUp, -fit.sy * hh)
     out.target.add(shift)
     out.position.add(shift)
-    // a little kick when the dome pops
-    const kick = window01(local, T.inflate[0], T.inflate[0] + 0.06, 0.02) * Math.sin(time * 40) * 0.05
-    out.position.y += kick
+    // a little bump as the dome pops: a damped wobble across the scroll, so it
+    // plays once as you scroll through and rests still wherever you stop
+    const ku = segment(local, T.inflate[0], T.inflate[0] + 0.07)
+    if (!still && ku > 0 && ku < 1) out.position.y += Math.sin(ku * Math.PI * 3) * Math.exp(-ku * 3.5) * 0.07
     out.fov = FOV
     out.roll = 0
     out.parallax = fit.portrait ? 0.3 : 0.7
@@ -225,11 +242,11 @@ export default function create(): Chapter {
       fitPointsTall.push(...fitPoints, new THREE.Vector3(-3.5, 7.2, -1.5), new THREE.Vector3(3.6, 7.0, -0.9))
 
       // ---------------------------------------------------------------- DOM
-      const root = el('div', 'shd', undefined, stage)
+      const root = (shd = el('div', 'shd', undefined, stage))
       probe = el('div', 'shd-probe', undefined, root)
       copy = el('div', 'shd-copy', undefined, root)
       eyebrow = el('p', 'hud-eyebrow shd-eyebrow', SECURITY.eyebrow, copy)
-      const title = el('h2', 'hud-title shd-title', undefined, copy)
+      title = el('h2', 'hud-title shd-title', undefined, copy)
       const [w1, w2] = SECURITY.title.split(/\s+(?=\S+$)/)
       t1 = rise(el('span', 'shd-line', undefined, title), w1 ?? 'Hacked?')
       t2 = rise(el('span', 'shd-line', undefined, title), `<em>${w2 ?? 'Breathe.'}</em>`)
@@ -272,7 +289,9 @@ export default function create(): Chapter {
       const t = time * pace
 
       // ------------------------------------------------------------ phases
-      const clearA = ease.inOutQuad(segment(local, T.clear[0], T.clear[1]))
+      // the sky clears on a steep S so it spends little scroll half-grey, and the
+      // headline flips from white to ink (T.lightsUp) right at its middle
+      const clearA = ease.inOutCubic(segment(local, T.clear[0], T.clear[1]))
       const stormA = lerp(0.4, 1, ease.outCubic(segment(local, T.stormIn[0], 0.16))) * (1 - clearA)
       const rain = segment(local, T.rainIn[0], T.rainIn[1]) * (1 - segment(local, T.rainOut[0], T.rainOut[1]))
       const inflate = segment(local, T.inflate[0], T.inflate[1])
@@ -281,7 +300,7 @@ export default function create(): Chapter {
       const deflate = segment(local, T.deflate[0], T.deflate[1])
       const outB = segment(local, T.out[0], 1)
 
-      computePose(local, time, tmpPose)
+      computePose(local, time, tmpPose, rm)
       applyScratch(tmpPose)
       const camPos = tmpPose.position
 
@@ -345,7 +364,7 @@ export default function create(): Chapter {
       du2.uFront.value = segment(local, T.inflate[0] + 0.005, T.inflate[1] + 0.01)
       du2.uIntensity.value = 1 + 0.8 * window01(deflate, 0.0, 1.0, 0.3)
       du2.uWatch.value = 0
-      du2.uPing.value = rain * (inflate >= 1 ? 1 : 0)
+      du2.uPing.value = rm ? 0 : rain * (inflate >= 1 ? 1 : 0)
       du2.uCamPos.value.copy(ctx.camera.position)
       _dome.set(0, cy, 0, domeOn ? r * 1.02 : 0)
 
@@ -423,12 +442,22 @@ export default function create(): Chapter {
       rainbow.group.rotation.y = RAINBOW_AZ
       glints.mat.uniforms.uTime.value = t
       glints.mat.uniforms.uAmp.value = segment(local, 0.74, 0.8) * (1 - outB) * (rm ? 0.6 : 1)
+      // keep the world's distant islets out from behind the copy (guarded, so
+      // this still builds against a World without params.keepOut)
+      if (local > T.eyebrow && 'keepOut' in wp) wp.keepOut = keep
 
       // ------------------------------------------------------------ DOM
-      stage.classList.toggle('is-dark', local < T.lightsUp)
-      reveal(eyebrow, window01(local, 0.075, 0.99, 0.03), 10)
-      setRise(t1, local > T.hackTitle && local < 0.985)
-      setRise(t2, local > T.breathe && local < 0.985)
+      const dark = local < T.lightsUp
+      stage.classList.toggle('is-dark', dark)
+      // the storm scrim sits behind the white headline while it's up in the dark
+      shd.classList.toggle('is-scrim', dark && local > T.hackTitle - 0.005)
+      reveal(eyebrow, window01(local, T.eyebrow, 0.99, 0.03), 10)
+      const on1 = local > T.hackTitle && local < 0.985
+      const on2 = local > T.breathe && local < 0.985
+      setRise(t1, on1)
+      setRise(t2, on2)
+      // the scrim hugs just 'Hacked?' until 'Breathe.' joins it
+      title.classList.toggle('is-one', on1 && !on2)
       bodyCard.classList.toggle('is-in', local > T.body[0] && local < T.body[1])
       watchCard.classList.toggle('is-in', local > T.watch && local < 0.985)
 
@@ -439,7 +468,7 @@ export default function create(): Chapter {
     },
 
     camera(local, frame, out) {
-      computePose(local, frame.time, pose)
+      computePose(local, frame.time, pose, frame.reducedMotion)
       out.position.copy(pose.position)
       out.target.copy(pose.target)
       out.fov = pose.fov

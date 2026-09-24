@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 /*
  * Small building blocks for the Building Site:
- *  - Batch: static pieces merged into ONE vertex-coloured mesh (one draw call
+ *  - Batch: static pieces merged into ONE vertex-colored mesh (one draw call
  *    per batch, however many props it holds).
  *  - pop / land curves: the toy squash-and-stretch vocabulary.
  *  - Pops: threshold-triggered springs. Whether a piece is "in" is derived
@@ -33,14 +33,14 @@ export class Batch {
   constructor(private opts: { uv?: boolean; color?: boolean } = {}) {}
 
   /**
-   * Add a geometry (cloned, flattened to non-indexed) with a flat colour and
+   * Add a geometry (cloned, flattened to non-indexed) with a flat color and
    * an optional transform. `glow` > 0 marks it as a window that lights up
    * warm at dusk (the kit's clayVC material reads the attribute).
    */
   add(geo: THREE.BufferGeometry, color: string | THREE.Color | null, m?: THREE.Matrix4, glow = 0): this {
     const g = geo.index ? geo.toNonIndexed() : geo.clone()
     const keepUv = !!this.opts.uv
-    // null colour keeps the geometry's own vertex colours (if it has any)
+    // null color keeps the geometry's own vertex colors (if it has any)
     const keepColor = color === null && !!g.attributes.color && this.opts.color !== false
     const keepGlow = keepColor && !!g.attributes.glow
     for (const k of Object.keys(g.attributes)) {
@@ -70,7 +70,7 @@ export class Batch {
     return this
   }
 
-  /** Axis-aligned box (then yawed) by its centre. */
+  /** Axis-aligned box (then yawed) by its center. */
   box(w: number, h: number, d: number, color: string, x: number, y: number, z: number, ry = 0, rx = 0, rz = 0, glow = 0): this {
     _e.set(rx, ry, rz)
     _q.setFromEuler(_e)
@@ -96,7 +96,7 @@ export class Batch {
     return this.add(geo, color, _m)
   }
 
-  /** Bake a kit object (its meshes, their material colours, its transform) into the batch. */
+  /** Bake a kit object (its meshes, their material colors, its transform) into the batch. */
   object(o: THREE.Object3D, parent?: THREE.Matrix4): this {
     o.updateMatrixWorld(true)
     o.traverse(c => {
@@ -129,7 +129,7 @@ export class Batch {
   }
 }
 
-/** Add colour + glow attributes to a bare geometry so the kit's clayVC() can draw it. */
+/** Add color + glow attributes to a bare geometry so the kit's clayVC() can draw it. */
 export function paintFlat(g: THREE.BufferGeometry, color: string, glow = 0) {
   const n = g.attributes.position.count
   _c.set(color)
@@ -187,7 +187,7 @@ export function landCurve(q: number, calm: boolean, out: Squash): Squash {
   return out
 }
 
-/** 0..1 flip with a small overshoot (revolving hoarding panels). */
+/** 0..1 flip with a small overshoot (revolving fence panels). */
 export function flipCurve(p: number, calm: boolean) {
   if (p <= 0) return 0
   if (p >= 1) return 1

@@ -352,7 +352,7 @@ export const PROCESS = [
  * borrowed from igloo.inc.
  */
 export const MICROCOPY = {
-  signalEyebrow: 'Welcome to Hark',
+  signalEyebrow: 'Welcome to Hark Town',
   scrollHint: 'Scroll to explore',
   audio: 'Sound',
   audioOn: 'On',

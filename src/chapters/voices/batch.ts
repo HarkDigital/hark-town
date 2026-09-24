@@ -5,12 +5,16 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
  * Collects static meshes (kit props, hand-built dressing) and merges them into
  * one mesh per material + shadow flags, so a whole island draws in a handful
  * of calls. Geometry is baked into the batch root's space and stripped to
- * position/normal (and colour when present) so any mix of kit pieces merges.
+ * position/normal (plus colour and the kit's dusk `glow` when present) so any
+ * mix of kit pieces merges. Pieces in a bucket without `glow` get zeros, so
+ * kit windows and bulbs still light up at dusk after the merge. Everything
+ * stays indexed (non-indexed pieces get an identity index), so the kit's
+ * welded vertices aren't blown back up into a triangle soup.
  */
 export class StaticBatch {
   private buckets = new Map<
     string,
-    { mat: THREE.Material; geos: THREE.BufferGeometry[]; cast: boolean; receive: boolean; color: boolean }
+    { mat: THREE.Material; geos: THREE.BufferGeometry[]; cast: boolean; receive: boolean; color: boolean; glow: boolean }
   >()
   /** instanced / skinned / non-mesh children that can't merge are kept as-is */
   private loose: THREE.Object3D[] = []
@@ -37,10 +41,18 @@ export class StaticBatch {
       const receive = opts.receive ?? m.receiveShadow
       const src = m.geometry
       if (!src?.attributes?.position) return
-      let g = src.index ? src.toNonIndexed() : src.clone()
+      const g = src.clone()
+      if (!g.index) {
+        const n = g.attributes.position.count
+        const idx = n > 65535 ? new Uint32Array(n) : new Uint16Array(n)
+        for (let i = 0; i < n; i++) idx[i] = i
+        g.setIndex(new THREE.BufferAttribute(idx, 1))
+      }
       const hasColor = !!g.attributes.color && !!(mat as THREE.MeshStandardMaterial).vertexColors
+      // the kit's evening-light channel (windows, bulbs): keep it through the merge
+      const hasGlow = hasColor && !!g.attributes.glow && g.attributes.glow.itemSize === 1
       for (const name of Object.keys(g.attributes)) {
-        if (name !== 'position' && name !== 'normal' && !(hasColor && name === 'color')) g.deleteAttribute(name)
+        if (name !== 'position' && name !== 'normal' && !(hasColor && name === 'color') && !(hasGlow && name === 'glow')) g.deleteAttribute(name)
       }
       g.morphAttributes = {}
       g.clearGroups()
@@ -58,13 +70,14 @@ export class StaticBatch {
       }
       g.applyMatrix4(m.matrixWorld)
       // mirrored transforms flip the winding: fix it so faces stay front-facing
-      if (m.matrixWorld.determinant() < 0) g = flipWinding(g)
+      if (m.matrixWorld.determinant() < 0) flipWinding(g)
       const key = `${mat.uuid}|${cast ? 1 : 0}|${receive ? 1 : 0}|${hasColor ? 1 : 0}`
       let b = this.buckets.get(key)
       if (!b) {
-        b = { mat, geos: [], cast, receive, color: hasColor }
+        b = { mat, geos: [], cast, receive, color: hasColor, glow: false }
         this.buckets.set(key, b)
       }
+      if (hasGlow && !b.glow) b.glow = (g.attributes.glow.array as Float32Array).some(v => v !== 0)
       b.geos.push(g)
     })
   }
@@ -73,6 +86,12 @@ export class StaticBatch {
   build(parent: THREE.Object3D): THREE.Object3D[] {
     const out: THREE.Object3D[] = []
     for (const b of this.buckets.values()) {
+      // every piece in a bucket needs the same attribute set: pad `glow` with
+      // zeros where a piece has none, or drop it when nothing in the bucket glows
+      for (const g of b.geos) {
+        if (b.glow && !g.attributes.glow) g.setAttribute('glow', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count), 1))
+        else if (!b.glow && g.attributes.glow) g.deleteAttribute('glow')
+      }
       const merged = b.geos.length === 1 ? b.geos[0] : mergeGeometries(b.geos, false)
       if (!merged) continue
       merged.computeBoundingSphere()
@@ -94,19 +113,14 @@ export class StaticBatch {
   }
 }
 
+/** swap the 2nd/3rd corner of every triangle (indexed geometry) */
 function flipWinding(g: THREE.BufferGeometry) {
-  const pos = g.attributes.position
-  const attrs = Object.values(g.attributes) as THREE.BufferAttribute[]
-  for (let i = 0; i + 2 < pos.count; i += 3) {
-    for (const a of attrs) {
-      for (let k = 0; k < a.itemSize; k++) {
-        const t = a.array[(i + 1) * a.itemSize + k]
-        ;(a.array as Float32Array)[(i + 1) * a.itemSize + k] = a.array[(i + 2) * a.itemSize + k]
-        ;(a.array as Float32Array)[(i + 2) * a.itemSize + k] = t
-      }
-    }
+  const idx = g.index!.array as Uint16Array | Uint32Array
+  for (let i = 0; i + 2 < idx.length; i += 3) {
+    const t = idx[i + 1]
+    idx[i + 1] = idx[i + 2]
+    idx[i + 2] = t
   }
-  return g
 }
 
 /** Paint a flat vertex colour onto a geometry (for vertex-coloured merges). */
@@ -121,24 +135,3 @@ export function paint(g: THREE.BufferGeometry, r: number, gg: number, b: number)
   g.setAttribute('color', new THREE.BufferAttribute(arr, 3))
   return g
 }
-
-/**
- * Yield to the browser between heavy build steps. rAF never fires in a hidden
- * tab, so fall back to a macrotask there (and time out if hidden mid-wait).
- */
-export const breathe = () =>
-  new Promise<void>(resolve => {
-    let done = false
-    const r = () => {
-      if (!done) {
-        done = true
-        resolve()
-      }
-    }
-    if (typeof document !== 'undefined' && document.hidden) {
-      setTimeout(r, 0)
-      return
-    }
-    requestAnimationFrame(r)
-    setTimeout(r, 120)
-  })

@@ -228,30 +228,6 @@ export class Kit {
 }
 
 /**
- * Yield to the browser between heavy init steps. rAF never fires in a hidden
- * tab, so fall back to a macrotask there (and a timeout guards a tab that is
- * hidden mid-wait).
- */
-export const breathe = () =>
-  new Promise<void>(resolve => {
-    let done = false
-    const r = () => {
-      if (!done) {
-        done = true
-        resolve()
-      }
-    }
-    if (document.hidden) {
-      const ch = new MessageChannel()
-      ch.port1.onmessage = r
-      ch.port2.postMessage(0)
-      return
-    }
-    requestAnimationFrame(r)
-    setTimeout(r, 120)
-  })
-
-/**
  * A springy value driven toward a scroll-derived target. The target always
  * comes from `local`, so jumping anywhere settles to the right state; the
  * spring only adds the toy "pop" (squash, overshoot, settle).

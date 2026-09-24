@@ -1,23 +1,4 @@
-/**
- * Yield between heavy build steps so the loader keeps painting. rAF never
- * fires in a hidden tab, so a timeout backs it up.
- */
-export const nextFrame = () =>
-  new Promise<void>(resolve => {
-    let done = false
-    const r = () => {
-      if (!done) {
-        done = true
-        resolve()
-      }
-    }
-    if (typeof document !== 'undefined' && document.hidden) {
-      setTimeout(r, 0)
-      return
-    }
-    requestAnimationFrame(r)
-    setTimeout(r, 120)
-  })
+/** Small shared helpers for The Storm. */
 
 export const fract = (x: number) => x - Math.floor(x)
 

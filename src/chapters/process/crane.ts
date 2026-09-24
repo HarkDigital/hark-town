@@ -214,7 +214,7 @@ export class Crane {
     }
   }
 
-  /** Slings from the hook to the four lifting eyes on a floor whose base centre is `base`. */
+  /** Slings from the hook to the four lifting eyes on a floor whose base center is `base`. */
   setSlings(base: THREE.Vector3 | null) {
     this.slings.visible = !!base
     if (!base) {

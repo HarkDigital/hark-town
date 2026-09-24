@@ -397,7 +397,7 @@ export function createChrome(root: HTMLElement, engine: Engine, sound: Sound) {
   }
   menuBtn.addEventListener('click', () => (menuOpen ? closeMenu() : openMenu()))
   menuClose.addEventListener('click', () => closeMenu())
-  window.addEventListener('keydown', e => {
+  const onMenuKey = (e: KeyboardEvent) => {
     if (!menuOpen) return
     if (e.key === 'Escape') {
       e.preventDefault()
@@ -410,7 +410,9 @@ export function createChrome(root: HTMLElement, engine: Engine, sound: Sound) {
       e.preventDefault()
       f[next].focus()
     }
-  })
+  }
+  // capture: the dialog's own trap runs ahead of the no-`inert` fallback in inert.ts
+  window.addEventListener('keydown', onMenuKey, true)
   matchMedia('(min-width: 721px)').addEventListener('change', e => {
     if (e.matches) closeMenu(false)
   })

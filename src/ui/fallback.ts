@@ -10,6 +10,10 @@ import { balloonSvg, buildIslandSvg, miniIslandSvg } from './art'
  * Town: a cover with the little island, a fold-out route map of the seven
  * stops, then one guidebook entry per stop. Same copy, same HUD vocabulary,
  * no scene. Styled by the .fb-* rules in ui.css.
+ *
+ * Landmarks: the brand + primary nav are a real banner <header> just before
+ * <main id="track"> and the credits a <footer> just after it, so "Skip to
+ * content" (#track) lands on the guidebook itself, past the navigation.
  */
 export function renderFallback(root: HTMLElement) {
   document.documentElement.classList.add('no-webgl')
@@ -37,10 +41,14 @@ export function renderFallback(root: HTMLElement) {
   ]
   const stopLabel = (i: number) => `Stop ${String(i + 1).padStart(2, '0')} · ${STOPS[i].town}`
 
-  root.style.pointerEvents = 'auto'
-  root.innerHTML = `
-  <div class="fb">
-    <header class="fb-top">
+  // banner and footer sit around <main> (a second call replaces them)
+  document.getElementById('fb-head')?.remove()
+  document.getElementById('fb-foot')?.remove()
+  const head = document.createElement('header')
+  head.className = 'fb fb-head'
+  head.id = 'fb-head'
+  head.innerHTML = `
+    <div class="fb-top">
       <a class="fb-brand" href="#fb-top" aria-label="${esc(BRAND.name)}, top of page">
         <span class="fb-mark">${markSvg('fb-mark-svg')}</span>
         <span class="fb-brand-text" aria-hidden="true"><span class="fb-word">${WORDMARK}</span><span class="fb-sub">${CONCEPT_TAG}</span></span>
@@ -51,8 +59,21 @@ export function renderFallback(root: HTMLElement) {
         <a class="fb-link" href="#fb-contact">Contact</a>
         <a class="fb-cta" href="${CONTACT.href}">Start a project</a>
       </nav>
-    </header>
+    </div>`
+  const foot = document.createElement('footer')
+  foot.className = 'fb fb-end'
+  foot.id = 'fb-foot'
+  foot.innerHTML = `
+    <div class="fb-foot">
+      <p>© ${new Date().getFullYear()} ${esc(BRAND.name)} · ${esc(BRAND.locale)}</p>
+      <p class="fb-foot-links"><a href="${BRAND.classicSite}">Classic site</a><span aria-hidden="true"> · </span><a href="${BRAND.orbitSite}">Orbit</a><span aria-hidden="true"> · </span><a href="${BRAND.resonanceSite}">Resonance</a><span aria-hidden="true"> · </span><a href="${BRAND.pressSite}">Press</a></p>
+    </div>`
+  root.before(head)
+  root.after(foot)
 
+  root.style.pointerEvents = 'auto'
+  root.innerHTML = `
+  <div class="fb fb-body">
     <section class="fb-hero" id="fb-top" aria-labelledby="fb-h1">
       <div class="fb-hero-copy">
         <p class="hud-eyebrow">A guidebook to Hark Town</p>
@@ -141,10 +162,5 @@ export function renderFallback(root: HTMLElement) {
       <p class="hud-body fb-lede">${esc(CONTACT.body)}</p>
       <p class="fb-actions"><a class="hud-btn" href="${CONTACT.href}">${esc(BRAND.email)} <span aria-hidden="true">→</span></a></p>
     </section>
-
-    <footer class="fb-foot">
-      <p>© ${new Date().getFullYear()} ${esc(BRAND.name)} · ${esc(BRAND.locale)}</p>
-      <p class="fb-foot-links"><a href="${BRAND.classicSite}">Classic site</a><span aria-hidden="true"> · </span><a href="${BRAND.orbitSite}">Orbit</a><span aria-hidden="true"> · </span><a href="${BRAND.resonanceSite}">Resonance</a><span aria-hidden="true"> · </span><a href="${BRAND.pressSite}">Press</a></p>
-    </footer>
   </div>`
 }

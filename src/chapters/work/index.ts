@@ -6,7 +6,8 @@ import { SECTIONS, WORK, workImage, type WorkItem } from '../../content'
 import { Signage, placeholderTexture } from './signs'
 import { buildTown, type Popper, type Town } from './town'
 import { Life } from './life'
-import { breathe, squash } from './kit'
+import { squash } from './kit'
+import { nextFrame } from '../../core/yield'
 import * as L from './layout'
 import './work.css'
 
@@ -16,7 +17,8 @@ import './work.css'
  * A long floating island with a tram line down the middle. The Hark tram
  * leaves the terminus and calls at six shops in turn; as it pulls in, the
  * shop's rooftop billboard flips from a green "Stop 0N" face to the client's
- * website, and a wayfinding plate slides in with the project. Past the six
+ * website (washing out to blank paper once the tram moves on), and a
+ * wayfinding plate slides in with the project. Past the six
  * stops the street opens into a market row of nine stalls (the other nine
  * sites), then the tram rolls out across a sky bridge and the camera lifts
  * into the clouds.
@@ -94,8 +96,13 @@ function tramX(l: number) {
   const m1 = L.STALL_X[NR - 1] + L.MARKET_LEAD
   if (l < MP0) return lerp(L.STOP_X[NF - 1], m0, ease.inOutCubic(clamp((l - F1) / (MP0 - F1))))
   if (l < MP1) return lerp(m0, m1, marketU(l))
-  return lerp(m1, L.BRIDGE_END + 8, ease.inCubic(clamp((l - MP1) / (1 - MP1))))
+  return lerp(m1, L.BRIDGE_END + 8, ease.inQuad(clamp((l - MP1) / (1 - MP1))))
 }
+
+/** Local at which stop k's billboard turns to the website (the tram is braking in). */
+const boardArrive = (k: number) => F0 + FW * (k + TRAVEL * 0.85)
+/** …and starts to wash out (the tram has just pulled away, the plate is already down). */
+const boardDepart = (k: number) => (k < NF - 1 ? F0 + FW * (k + 1 + TRAVEL * 0.15) : F1 + (MP0 - F1) * 0.2)
 
 /** Where on the route strip (0..1) a tram x sits. */
 const ROUTE_X0 = L.TERMINUS_X
@@ -168,6 +175,79 @@ function frameTo(out: Shot, C: THREE.Vector3, w: number, h: number, yaw: number,
   return out
 }
 
+const _c = new THREE.Vector3()
+const _o = new THREE.Vector3()
+const _probe = new THREE.PerspectiveCamera(16, 1, 0.5, 2000)
+/**
+ * frameTo for a set of points: fit the view-plane box (for this yaw/pitch)
+ * that holds all of them into `reg` (less `padPx`), at least `minW` wide.
+ * The first guess ignores perspective (near points project larger, far ones
+ * smaller), so it is corrected against the real projection a couple of times.
+ */
+function frameFit(out: Shot, pts: THREE.Vector3[], yaw: number, pitch: number, fov: number, reg: Region, W: number, H: number, minW: number, padPx: number) {
+  _d.set(-Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch))
+  _r.crossVectors(_d, UP).normalize()
+  _u.crossVectors(_r, _d).normalize()
+  const o = pts[0]
+  let a0 = Infinity
+  let a1 = -Infinity
+  let b0 = Infinity
+  let b1 = -Infinity
+  for (const p of pts) {
+    _o.subVectors(p, o)
+    a0 = Math.min(a0, _o.dot(_r))
+    a1 = Math.max(a1, _o.dot(_r))
+    b0 = Math.min(b0, _o.dot(_u))
+    b1 = Math.max(b1, _o.dot(_u))
+  }
+  const rx0 = reg.x0 + padPx
+  const rx1 = reg.x1 - padPx
+  const ry0 = reg.y0 + padPx
+  const ry1 = reg.y1 - padPx
+  const inner = { x0: rx0, x1: rx1, y0: ry0, y1: ry1 }
+  const tanH = Math.tan((fov * DEG) / 2)
+  _probe.fov = fov
+  _probe.aspect = W / H
+  _probe.updateProjectionMatrix()
+  for (let it = 0; ; it++) {
+    const w = a1 - a0
+    if (w < minW) {
+      a0 -= (minW - w) / 2
+      a1 += (minW - w) / 2
+    }
+    // (frameTo recomputes the same basis)
+    const C = _c.copy(o).addScaledVector(_r, (a0 + a1) / 2).addScaledVector(_u, (b0 + b1) / 2)
+    frameTo(out, C, a1 - a0, b1 - b0, yaw, pitch, fov, inner, W, H)
+    if (it === 2) break
+    const dist = _o.subVectors(C, out.pos).dot(_d)
+    const upp = (2 * dist * tanH) / H
+    _probe.position.copy(out.pos)
+    _probe.lookAt(out.tgt)
+    _probe.updateMatrixWorld()
+    let sx0 = Infinity
+    let sx1 = -Infinity
+    let sy0 = Infinity
+    let sy1 = -Infinity
+    for (const p of pts) {
+      _o.copy(p).project(_probe)
+      const sx = (_o.x * 0.5 + 0.5) * W
+      const sy = (0.5 - _o.y * 0.5) * H
+      sx0 = Math.min(sx0, sx)
+      sx1 = Math.max(sx1, sx)
+      sy0 = Math.min(sy0, sy)
+      sy1 = Math.max(sy1, sy)
+    }
+    if (!Number.isFinite(sx0 + sx1 + sy0 + sy1) || !(upp > 0)) break
+    // pull each box edge in (or push it out) by how far its points fall short of (or past) the region
+    a0 += (sx0 - rx0) * upp
+    a1 -= (rx1 - sx1) * upp
+    b1 -= (sy0 - ry0) * upp
+    b0 += (ry1 - sy1) * upp
+    if (!(a1 > a0 && b1 > b0)) break
+  }
+  return out
+}
+
 interface Layout {
   key: string
   W: number
@@ -189,6 +269,72 @@ function loadImage(url: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error(`failed to load ${url}`))
     img.src = url
   })
+}
+
+/** A decoded screenshot: an ImageBitmap (decoded + resized off the main thread) or, as a fallback, an <img>. */
+interface Pic {
+  src: ImageBitmap | HTMLImageElement
+  bitmap: boolean
+}
+
+/**
+ * Fetch a screenshot and decode it off the main thread at the size it is
+ * drawn at (the sources are 1280×800). Older engines that reject the resize
+ * options get a full-size bitmap; engines without createImageBitmap (or that
+ * fail to decode the blob) fall back to a plain <img>.
+ */
+async function loadPic(url: string, w: number, h: number): Promise<Pic> {
+  if (typeof createImageBitmap === 'function' && typeof fetch === 'function') {
+    let blob: Blob | null = null
+    try {
+      const res = await fetch(url)
+      if (res.ok) blob = await res.blob()
+    } catch {
+      blob = null
+    }
+    if (blob) {
+      try {
+        return { src: await createImageBitmap(blob, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' }), bitmap: true }
+      } catch {
+        /* resize options unsupported: decode at full size */
+      }
+      try {
+        return { src: await createImageBitmap(blob), bitmap: true }
+      } catch {
+        /* fall through to <img> */
+      }
+    }
+  }
+  return { src: await loadImage(url), bitmap: false }
+}
+
+/** Run `fn` when the main thread is idle (or within `timeout` ms regardless). */
+const whenIdle = (fn: () => void, timeout: number) => {
+  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(fn, { timeout })
+  else window.setTimeout(fn, 34)
+}
+
+interface NdcRect {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+/**
+ * Publish a copy box to the world's far-field keep-out (world.params.keepOut,
+ * an NDC rect, y up). Guarded: the world may not expose it; its shape may be a
+ * plain {x0, y0, x1, y1}, a Vector4 or a Box2.
+ */
+function publishKeepOut(wp: object, r: NdcRect) {
+  if (!('keepOut' in wp)) return
+  const holder = wp as { keepOut: unknown }
+  const ko = holder.keepOut
+  if (ko instanceof THREE.Vector4) ko.set(r.x0, r.y0, r.x1, r.y1)
+  else if (ko instanceof THREE.Box2) {
+    ko.min.set(r.x0, r.y0)
+    ko.max.set(r.x1, r.y1)
+  } else if (ko && typeof ko === 'object') Object.assign(ko, r)
+  else holder.keepOut = { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }
 }
 
 class Work implements Chapter {
@@ -215,6 +361,8 @@ class Work implements Chapter {
   private poseLocal = -1
   private plateW = 380
   private plateH = 360
+  /** each stop's own plate height (portrait frames each stop just above its plate) */
+  private plateHs: number[] = FEATURED.map(() => 0)
   private marketH = 360
   private introH = 200
 
@@ -226,6 +374,10 @@ class Work implements Chapter {
   private routeStalls: HTMLElement[] = []
   private intro!: HTMLElement
   private introTitle!: HTMLElement
+  private introNote!: HTMLElement
+  /** the intro headline's box in NDC (for world.params.keepOut), and the viewport it was measured at */
+  private keep = { x0: 0, y0: 0, x1: 0, y1: 0 }
+  private keepKey = ''
   private plates: { root: HTMLElement; name: HTMLElement; on: boolean }[] = []
   private market!: HTMLElement
   private marketTitle!: HTMLElement
@@ -233,12 +385,15 @@ class Work implements Chapter {
   private noteText = ''
   private nowStall = -1
 
-  // images
+  // images: decoded off-thread, then uploaded one per idle slot whichever chapter is on
   private jobs: (() => void)[] = []
   private queue: (() => Promise<unknown>)[] = []
   private loading = 0
   private streaming = false
   private postersDirty = false
+  private postersPending = REST.length
+  private idleQueued = false
+  private active = false
 
   // pokes
   private ray = new THREE.Raycaster()
@@ -249,6 +404,7 @@ class Work implements Chapter {
   private eul = new THREE.Euler()
   private probe = new THREE.PerspectiveCamera(16, 1, 0.5, 2000)
   private pts = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]
+  private fit = Array.from({ length: 5 }, () => new THREE.Vector3())
   private tmpP = new THREE.Vector3()
   private tramV = 0
   private arrived: boolean[] = FEATURED.map(() => false)
@@ -265,18 +421,25 @@ class Work implements Chapter {
     const aniso = Math.min(8, ctx.renderer.capabilities.getMaxAnisotropy())
     for (const t of [this.signage.signsTex, this.signage.stallsTex, this.signage.postersTex]) t.anisotropy = aniso
     this.buildDom(ctx.stage)
-    await breathe()
+    await nextFrame()
 
     this.town = await buildTown(this.signage, this.mobile, placeholderTexture())
     this.group.add(this.town.root)
-    await breathe()
+    await nextFrame()
 
     this.life = new Life(this.mobile)
     this.town.root.add(this.life.group)
     this.placeTransitClouds()
 
-    // repaint signage once the real faces are in
-    this.signage.whenFonts().then(() => this.signage.flush())
+    // repaint signage once the real faces are in, and upload it while idle
+    // (not on the first Main Street frame)
+    this.signage.whenFonts().then(() => {
+      this.signage.flush()
+      this.addJob(() => {
+        this.upload(this.signage.signsTex)
+        this.upload(this.signage.stallsTex)
+      })
+    })
 
     // screenshots: the first billboard now, the rest once the site is revealed
     this.queue = [
@@ -310,18 +473,22 @@ class Work implements Chapter {
   }
 
   private fetchFeatured(k: number) {
-    return loadImage(workImage(FEATURED[k].id))
-      .then(img => {
-        const tex = new THREE.Texture(img)
+    // billboards are ~400 css px wide at most on screen
+    const [w, h] = this.mobile ? [800, 500] : [1024, 640]
+    return loadPic(workImage(FEATURED[k].id), w, h)
+      .then(pic => {
+        const tex = new THREE.Texture(pic.src)
         tex.colorSpace = THREE.SRGBColorSpace
         tex.anisotropy = Math.min(8, this.ctx.renderer.capabilities.getMaxAnisotropy())
+        if (pic.bitmap) {
+          // WebGL ignores UNPACK_FLIP_Y for ImageBitmaps: flip in the UVs instead
+          tex.flipY = false
+          tex.repeat.set(1, -1)
+          tex.offset.set(0, 1)
+        }
         tex.needsUpdate = true
-        this.jobs.push(() => {
-          try {
-            this.ctx.renderer.initTexture(tex)
-          } catch {
-            /* uploads on first use instead */
-          }
+        this.addJob(() => {
+          this.upload(tex)
           this.town.boards[k].screen.map = tex
         })
       })
@@ -329,14 +496,63 @@ class Work implements Chapter {
   }
 
   private fetchPoster(j: number) {
-    return loadImage(workImage(REST[j].id))
-      .then(img => {
-        this.jobs.push(() => {
-          this.signage.poster(j, img)
+    // sidewalk A-board thumbnails are 320×200 cells in the posters atlas
+    return loadPic(workImage(REST[j].id), 320, 200)
+      .then(pic => {
+        this.addJob(() => {
+          this.signage.poster(j, pic.src)
           this.postersDirty = true
         })
       })
       .catch(err => console.warn(`[work] missing screenshot for ${REST[j].id}`, err))
+      .finally(() => {
+        this.postersPending--
+        this.addJob(() => this.flushPosters())
+      })
+  }
+
+  /** Upload a texture now (off the render path), or leave it for first use. */
+  private upload(tex: THREE.Texture) {
+    try {
+      this.ctx.renderer.initTexture(tex)
+    } catch {
+      /* uploads on first use instead */
+    }
+  }
+
+  /** One posters-atlas upload once every thumbnail has settled (or at once while Main Street is on screen). */
+  private flushPosters() {
+    if (!this.postersDirty || (this.postersPending > 0 && !this.active)) return
+    this.postersDirty = false
+    this.signage.postersTex.needsUpdate = true
+    this.upload(this.signage.postersTex)
+  }
+
+  /**
+   * Queue a texture upload / poster paint. Jobs run one per idle slot whichever
+   * chapter is on screen, so everything is on the GPU before the tram arrives
+   * (and a first visit to Main Street never pays for it mid-wipe).
+   */
+  private addJob(job: () => void) {
+    this.jobs.push(job)
+    this.pumpJobs()
+  }
+
+  private pumpJobs() {
+    if (this.idleQueued || !this.jobs.length) return
+    this.idleQueued = true
+    whenIdle(() => {
+      this.idleQueued = false
+      const job = this.jobs.shift()
+      if (job) {
+        try {
+          job()
+        } catch (err) {
+          console.warn('[work] job failed', err)
+        }
+      }
+      this.pumpJobs()
+    }, 600)
   }
 
   // ------------------------------------------------------------------ DOM
@@ -367,6 +583,7 @@ class Work implements Chapter {
     const [a, b] = SECTIONS.work.title.split(/ (?=\S+$)/)
     this.introTitle = rise(el('h2', 'hud-title', undefined, this.intro), `${esc(a)} <em>${esc(b)}</em>`)
     const note = el('p', 'wk-intro-note', undefined, this.intro)
+    this.introNote = note
     note.innerHTML = `<span class="wk-roundel" aria-hidden="true">H</span><span class="hud-label">Line H · ${NF} stops · ${NR} market stalls</span>`
 
     // one wayfinding plate per stop, docked left (or along the bottom on phones)
@@ -426,15 +643,17 @@ class Work implements Chapter {
   private measure() {
     let w = 0
     let h = 0
-    for (const p of this.plates) {
+    this.plates.forEach((p, k) => {
       w = Math.max(w, p.root.offsetWidth)
       h = Math.max(h, p.root.offsetHeight)
-    }
+      this.plateHs[k] = p.root.offsetHeight
+    })
     if (w) this.plateW = w
     if (h) this.plateH = h
     this.marketH = this.market.offsetHeight || this.marketH
     this.introH = this.intro.offsetHeight || this.introH
     this.layout = null
+    this.keepKey = ''
   }
 
   // ------------------------------------------------------------------ camera
@@ -444,7 +663,7 @@ class Work implements Chapter {
     if (this.layout?.key === key) return this.layout
     const W = f.width
     const H = f.height
-    const portrait = W / H < 0.8 || W < 700
+    const portrait = W / H <= 0.8 || W < 700 // matches work.css (max-aspect-ratio: 4/5)
     this.layout = {
       key,
       W,
@@ -458,12 +677,14 @@ class Work implements Chapter {
   }
 
   /** Where the subject goes on screen: right of the plate (landscape) or above it (portrait). */
-  private region(kind: 'stop' | 'market' | 'intro', lay: Layout): Region {
+  private region(kind: 'stop' | 'market' | 'intro', lay: Layout, k = -1): Region {
     const { W, H, gutter, safeTop, safeBottom } = lay
     if (lay.portrait) {
-      const below = kind === 'stop' ? this.plateH : kind === 'market' ? this.marketH : this.introH
-      // the subject may tuck a little under the top of the plate
-      const y1 = Math.max(safeTop + 170, H - safeBottom - 6 - below + (kind === 'intro' ? -10 : 18))
+      const below = kind === 'stop' ? this.plateHs[k] || this.plateH : kind === 'market' ? this.marketH : this.introH
+      // the market may tuck a little under the top of its plate; a stop's
+      // subject box already holds the tram, which must stay clear of it
+      const tuck = kind === 'intro' ? -10 : kind === 'market' ? 18 : -6
+      const y1 = Math.max(safeTop + 170, H - safeBottom - 6 - below + tuck)
       return { x0: gutter * 0.4, x1: W - gutter * 0.4, y0: safeTop + (kind === 'intro' ? 30 : 62), y1 }
     }
     if (kind === 'intro') return { x0: W * 0.2, x1: W - gutter * 0.3, y0: H * 0.3, y1: H - safeBottom * 0.55 }
@@ -509,20 +730,24 @@ class Work implements Chapter {
 
   private stopShot(k: number, s: number, lay: Layout, out: Shot) {
     const port = lay.portrait
-    const C = this.tmp.set(L.SHOP_X[k] + (port ? 0.1 : -0.15), port ? 3.0 : 2.75, port ? -3.0 : -2.6)
     const drift = clamp((s - TRAVEL) / (1 - TRAVEL))
-    frameTo(
-      out,
-      C,
-      port ? 5.6 : 7.4,
-      port ? 6.4 : 8.4,
-      L.VIEW_YAW - 0.06 + drift * 0.1,
-      0.5 - drift * 0.03,
-      16,
-      this.region('stop', lay),
-      lay.W,
-      lay.H,
-    )
+    const yaw = L.VIEW_YAW - 0.06 + drift * 0.1
+    const pitch = 0.5 - drift * 0.03
+    const reg = this.region('stop', lay, k)
+    if (port) {
+      // island above the plate: fit the billboard's top edge and the whole tram
+      // (at its halt) between the head and the plate, whatever the aspect
+      const b = this.town.boards[k].center
+      const f = this.fit
+      const cx = Math.cos(L.BOARD_YAW) * 2.15
+      const cz = -Math.sin(L.BOARD_YAW) * 2.15
+      f[0].set(b.x - cx, b.y + 1.45, b.z - cz)
+      f[1].set(b.x + cx, b.y + 1.45, b.z + cz)
+      f[2].set(L.STOP_X[k] - 1.5, L.RAIL_Y, 0.46)
+      f[3].set(L.STOP_X[k] + 1.5, L.RAIL_Y, 0.46)
+      f[4].set(L.SHOP_X[k] + 0.1, 3.0, -3.0)
+      frameFit(out, f, yaw, pitch, 16, reg, lay.W, lay.H, 5.2, 8)
+    } else frameTo(out, this.tmp.set(L.SHOP_X[k] - 0.15, 2.75, -2.6), 7.4, 8.4, yaw, pitch, 16, reg, lay.W, lay.H)
     // a slow push in while we dwell
     out.pos.lerp(out.tgt, drift * 0.04)
     out.shadow = 9
@@ -590,7 +815,8 @@ class Work implements Chapter {
     } else {
       this.marketShot(MP1, lay, A)
       this.outShot(lay, B)
-      blendShot(A, B, ease.inCubic(clamp((l - MP1) / (1 - MP1))), out)
+      // (inQuad: already on the move as the shorter cut window opens)
+      blendShot(A, B, ease.inQuad(clamp((l - MP1) / (1 - MP1))), out)
     }
     this.poseLocal = l
     return out
@@ -666,6 +892,8 @@ class Work implements Chapter {
     wp.focus.copy(s.focus).applyAxisAngle(UP, L.STREET_YAW)
     wp.shadowSize = s.shadow
     wp.sunAzimuth = L.SUN_AZIMUTH
+    // keep the distant islets out from behind "Built to be heard."
+    if (l < F0 && this.introNdc(f)) publishKeepOut(wp, this.keep)
 
     // tilt-shift + finish
     const pp = ctx.post.params
@@ -707,16 +935,22 @@ class Work implements Chapter {
     for (const p of town.fillers) pop(p, l > popAt(p.x))
     for (let j = 0; j < town.stalls.length; j++) pop(town.stalls[j], tx > L.STALL_X[j] - 1.4)
 
-    // ---- billboards flip as the tram pulls in
+    // ---- billboards flip to the client's site as the tram pulls in; once it
+    // pulls out again the site washes out to blank paper, so only the stop we
+    // are at shows a website (a stop's plate never sits over another client's
+    // screen, and nothing competes with its copy)
     for (let k = 0; k < NF; k++) {
       const b = town.boards[k]
-      const arrive = F0 + FW * (k + TRAVEL * 0.85)
-      const here = l > arrive
+      const arrive = boardArrive(k)
+      const arrived = l > arrive
       // the shop gives a happy hop as its tram pulls in
-      if (here && !this.arrived[k] && !calm && Math.abs(l - arrive) < FW * 0.5) town.shops[k].spring.v += 3.2
-      this.arrived[k] = here
-      const x = b.spring.step(here ? 1 : 0, dt, calm)
+      if (arrived && !this.arrived[k] && !calm && Math.abs(l - arrive) < FW * 0.5) town.shops[k].spring.v += 3.2
+      this.arrived[k] = arrived
+      const x = b.spring.step(arrived ? 1 : 0, dt, calm)
       b.flip.rotation.x = x * Math.PI
+      const wash = ease.inOutQuad(clamp((l - boardDepart(k)) / (FW * 0.18))) * 0.94
+      b.blank.opacity = wash
+      b.blankMesh.visible = wash > 0.002
     }
 
     // ---- trees bounce in
@@ -726,18 +960,8 @@ class Work implements Chapter {
     town.animate(t, calm)
     this.life.update(t, calm, s.focus.x)
 
-    // ---- one heavy job per frame (texture uploads, poster paints)
-    const job = this.jobs.shift()
-    if (job) {
-      try {
-        job()
-      } catch (err) {
-        console.warn('[work] job failed', err)
-      }
-    } else if (this.postersDirty) {
-      this.postersDirty = false
-      this.signage.postersTex.needsUpdate = true
-    }
+    // ---- screenshots still streaming in while we are here: show them as they land
+    if (this.active && this.postersDirty && !this.jobs.length) this.flushPosters()
 
     this.updateDom(l, tx)
   }
@@ -854,6 +1078,35 @@ class Work implements Chapter {
     }
   }
 
+  /** Measure the intro headline + note (their text, not the column) in NDC, once per viewport. */
+  private introNdc(f: Frame) {
+    const key = `${f.width}x${f.height}`
+    if (this.keepKey === key) return true
+    // the column's box for the vertical extent (its children animate in),
+    // the text itself for how far right it reaches
+    const box = this.intro.getBoundingClientRect()
+    const range = document.createRange()
+    const x0 = box.left
+    const y0 = box.top
+    const y1 = box.bottom
+    let x1 = -Infinity
+    for (const n of [this.introTitle, this.introNote]) {
+      range.selectNodeContents(n)
+      const r = range.getBoundingClientRect()
+      if (r.width) x1 = Math.max(x1, r.right)
+    }
+    // hidden stage (prewarm) or not laid out yet: try again next frame
+    if (!(x1 > x0 && y1 > y0)) return false
+    const k = this.keep
+    const pad = 12
+    k.x0 = ((x0 - pad) / f.width) * 2 - 1
+    k.x1 = ((x1 + pad) / f.width) * 2 - 1
+    k.y0 = 1 - ((y1 + pad) / f.height) * 2
+    k.y1 = 1 - ((y0 - pad) / f.height) * 2
+    this.keepKey = key
+    return true
+  }
+
   camera(l: number, f: Frame, out: CameraPose) {
     const s = this.poseLocal === l && this.layout ? this.cur : this.solve(l, f)
     out.position.copy(s.pos).applyAxisAngle(UP, L.STREET_YAW)
@@ -875,8 +1128,13 @@ class Work implements Chapter {
     if (best && !ctx.reducedMotion) best.p.spring.v += 5.5
   }
 
+  onEnter() {
+    this.active = true
+  }
+
   onLeave() {
     this.tramPrevX = NaN
+    this.active = false
   }
 }
 

@@ -50,7 +50,7 @@ export const DEEP = new THREE.Vector3(-Math.sin(AZ0), 0, -Math.cos(AZ0))
 
 export interface IslandDef {
   k: number
-  /** world centre of the grass top */
+  /** world center of the grass top */
   pos: THREE.Vector3
   radius: number
   /** island yaw = the azimuth its camera visits from */
@@ -107,7 +107,7 @@ for (const d of ISLANDS) {
   if (next) d.aOut = localAngle(d.pos, next.pos, d.az)
 }
 
-/** centre + half-extents of the whole archipelago in (across, deep) terms */
+/** center + half-extents of the whole archipelago in (across, deep) terms */
 export const OVERVIEW = (() => {
   let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity, y0 = Infinity, y1 = -Infinity
   for (const [u, v, y, r] of RAW) {
@@ -120,7 +120,7 @@ export const OVERVIEW = (() => {
   }
   const cu = (u0 + u1) / 2, cv = (v0 + v1) / 2
   return {
-    centre: new THREE.Vector3().addScaledVector(ACROSS, cu).addScaledVector(DEEP, cv).setY((y0 + y1) / 2),
+    center: new THREE.Vector3().addScaledVector(ACROSS, cu).addScaledVector(DEEP, cv).setY((y0 + y1) / 2),
     eu: (u1 - u0) / 2,
     ev: (v1 - v0) / 2,
     y0: y0 - 0.5,

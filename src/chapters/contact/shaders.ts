@@ -3,9 +3,9 @@ import * as THREE from 'three'
 /*
  * Materials for the Lighthouse: the dusk sky (a camera-centred backdrop with
  * a Belt-of-Venus horizon, stars and a rising full moon, tuned for a long
- * lens), the lamp's two sweeping beams, the breathing sea of clouds and the
- * fluttering pennant. GLSL notes: no pow() on signed values, no fwidth, no
- * dynamic loops.
+ * lens) and the lamp's two sweeping beams. The cloud deck's material lives
+ * with it in ./clouds.ts (its haze reuses this sky's below-horizon colour).
+ * GLSL notes: no pow() on signed values, no fwidth, no dynamic loops.
  */
 
 const HASH = /* glsl */ `
@@ -195,82 +195,6 @@ export function beamMaterial() {
       }
     `,
   })
-}
-
-export interface PuffUniforms {
-  [k: string]: THREE.IUniform
-  uTime: { value: number }
-  uBreath: { value: number }
-  uHaze: { value: THREE.Color }
-  uHazeNear: { value: number }
-  uHazeFar: { value: number }
-}
-
-export function puffUniforms(): PuffUniforms {
-  return {
-    uTime: { value: 0 },
-    uBreath: { value: 1 },
-    uHaze: { value: new THREE.Color('#e7b8b0') },
-    uHazeNear: { value: 80 },
-    uHazeFar: { value: 200 },
-  }
-}
-
-/**
- * Clay cloud puffs that breathe (per-instance phase) and melt into the
- * far-sea colour with distance so the sea of clouds reaches the horizon.
- */
-export function puffMaterial(u: PuffUniforms) {
-  const m = new THREE.MeshStandardMaterial({
-    color: '#fff6ee',
-    roughness: 1,
-    metalness: 0,
-    vertexColors: true,
-    emissive: new THREE.Color('#f4e6ee'),
-    emissiveIntensity: 0.07,
-  })
-  m.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, u)
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform float uBreath;\nvarying float vHazeD;')
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-        #ifdef USE_INSTANCING
-          float puffPh = instanceMatrix[3].x * 0.31 + instanceMatrix[3].z * 0.47;
-          transformed *= 1.0 + 0.045 * uBreath * sin(uTime * 0.55 + puffPh);
-        #endif`,
-      )
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvHazeD = length(mvPosition.xyz);')
-    sh.fragmentShader = sh.fragmentShader
-      .replace(
-        '#include <common>',
-        '#include <common>\nuniform vec3 uHaze;\nuniform float uHazeNear;\nuniform float uHazeFar;\nvarying float vHazeD;',
-      )
-      .replace(
-        '#include <fog_fragment>',
-        '#include <fog_fragment>\ngl_FragColor.rgb = mix(gl_FragColor.rgb, uHaze, smoothstep(uHazeNear, uHazeFar, vHazeD));',
-      )
-  }
-  m.customProgramCacheKey = () => 'town-contact-puff'
-  return m
-}
-
-/** A pennant that flutters from its hoist (x = 0) to its tip (x = len). */
-export function flagMaterial(color: string, uTime: { value: number }, len: number) {
-  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.7, side: THREE.DoubleSide })
-  m.onBeforeCompile = sh => {
-    sh.uniforms.uTime = uTime
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;').replace(
-      '#include <begin_vertex>',
-      `#include <begin_vertex>
-      float flK = clamp(position.x / ${len.toFixed(3)}, 0.0, 1.0);
-      transformed.z += sin(position.x * 11.0 - uTime * 7.5) * 0.045 * flK;
-      transformed.y += sin(position.x * 7.0 - uTime * 5.0) * 0.012 * flK;`,
-    )
-  }
-  m.customProgramCacheKey = () => `town-contact-flag-${color}`
-  return m
 }
 
 /** Soft radial falloff for the lamp's glow sprite. */

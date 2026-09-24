@@ -17,6 +17,8 @@ import { KIT } from './anim'
  *   MAT.led           always-on Hark green LED (blooms)
  *   MAT.warm          always-on warm bulb (blooms)
  *   shadowed(obj)     mark a subtree as casting + receiving shadows
+ *   { instanced: true } / instancedTwin(mat)  the variant an InstancedMesh
+ *                     should draw with (one material per program variant)
  *
  * All kit materials get a faint sky-tinted rim light (driven by the World)
  * so the clay reads soft and sits inside the atmosphere.
@@ -136,7 +138,54 @@ function patchVC(shader: THREE.WebGLProgramParametersWithUniforms) {
 
 const cache = new Map<string, THREE.MeshStandardMaterial>()
 
-export interface ClayOptions {
+/*
+ * Instancing twins. three compiles a different program for plain meshes,
+ * InstancedMeshes and InstancedMeshes with per-instance colour, and keeps the
+ * choice on the MATERIAL: one material object shared by both kinds makes it
+ * re-run its program selection (getParameters + cache key) on every switch,
+ * several times a frame. So every cached kit material has lazily-made twins,
+ * identical except that each is only ever drawn one way. Ask for them with
+ * `{ instanced: true }` (+ `instanceColor: true` when you call setColorAt),
+ * or map any material with instancedTwin() / splitInstancing() (util.ts).
+ */
+export interface InstanceOptions {
+  /** the material will draw an InstancedMesh */
+  instanced?: boolean
+  /** ...one with per-instance colours (setColorAt) */
+  instanceColor?: boolean
+}
+
+type TwinMaker = (colored: boolean) => THREE.Material
+const twinOf = new WeakMap<THREE.Material, TwinMaker>()
+const isTwin = new WeakSet<THREE.Material>()
+
+/** Register a cached (never-mutated) plain material so instancedTwin() can find its instanced variants. */
+export function registerTwins(plain: THREE.Material, make: TwinMaker) {
+  twinOf.set(plain, make)
+}
+
+/** Mark a material as an instanced variant (splitInstancing leaves it alone). */
+export function markTwin<T extends THREE.Material>(m: T): T {
+  isTwin.add(m)
+  return m
+}
+
+/**
+ * The instanced variant of a cached kit material (clay, clayVC,
+ * cloudMaterial): `colored` = the InstancedMesh uses setColorAt. Returns the
+ * material itself when it is not a registered kit material.
+ */
+export function instancedTwin<T extends THREE.Material>(m: T, colored = false): T {
+  if (isTwin.has(m)) return m
+  const make = twinOf.get(m)
+  return make ? (make(colored) as T) : m
+}
+
+function variantKey(o: InstanceOptions) {
+  return o.instanced ? (o.instanceColor ? '|ic' : '|i') : ''
+}
+
+export interface ClayOptions extends InstanceOptions {
   rough?: number
   emissive?: string
   emissiveIntensity?: number
@@ -148,10 +197,12 @@ export interface ClayOptions {
  * Soft matte "clay" material (cached by colour + options). Everything in the
  * town is clay: it catches the sun, casts soft shadows, and reads as a
  * hand-made miniature under the tilt-shift. Cached: never mutate a returned
- * material unless you mean to change every user of it.
+ * material unless you mean to change every user of it. Pass
+ * `{ instanced: true }` for InstancedMeshes (see InstanceOptions).
  */
-export function clay(color: string, opts: ClayOptions = {}) {
-  const key = `${color}|${opts.rough ?? 0.82}|${opts.emissive ?? ''}|${opts.emissiveIntensity ?? 0}|${opts.plain ? 1 : 0}`
+export function clay(color: string, opts: ClayOptions = {}): THREE.MeshStandardMaterial {
+  const base = `${color}|${opts.rough ?? 0.82}|${opts.emissive ?? ''}|${opts.emissiveIntensity ?? 0}|${opts.plain ? 1 : 0}`
+  const key = base + variantKey(opts)
   let m = cache.get(key)
   if (!m) {
     m = new THREE.MeshStandardMaterial({
@@ -163,19 +214,27 @@ export function clay(color: string, opts: ClayOptions = {}) {
     })
     if (!opts.plain) m.onBeforeCompile = patchRim
     cache.set(key, m)
+    if (opts.instanced) markTwin(m)
+    else registerTwins(m, colored => clay(color, { ...opts, instanced: true, instanceColor: colored }))
   }
   return m
 }
 
 const vcCache = new Map<string, THREE.MeshStandardMaterial>()
 
+export interface ClayVCOptions extends InstanceOptions {
+  rough?: number
+  side?: THREE.Side
+}
+
 /**
  * The kit's workhorse: a vertex-colour clay material. Kit geometry carries
  * `color` + `glow` attributes, so any number of props share this one
- * material and merge into a single draw call.
+ * material and merge into a single draw call. InstancedMeshes take
+ * `clayVC({ instanced: true })` (+ `instanceColor: true` with setColorAt).
  */
-export function clayVC(opts: { rough?: number; side?: THREE.Side } = {}) {
-  const key = `${opts.rough ?? 0.84}|${opts.side ?? THREE.FrontSide}`
+export function clayVC(opts: ClayVCOptions = {}): THREE.MeshStandardMaterial {
+  const key = `${opts.rough ?? 0.84}|${opts.side ?? THREE.FrontSide}` + variantKey(opts)
   let m = vcCache.get(key)
   if (!m) {
     m = new THREE.MeshStandardMaterial({
@@ -188,6 +247,8 @@ export function clayVC(opts: { rough?: number; side?: THREE.Side } = {}) {
     m.onBeforeCompile = patchVC
     m.customProgramCacheKey = () => 'kit-vc'
     vcCache.set(key, m)
+    if (opts.instanced) markTwin(m)
+    else registerTwins(m, colored => clayVC({ ...opts, instanced: true, instanceColor: colored }))
   }
   return m
 }

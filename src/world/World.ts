@@ -2,7 +2,9 @@ import * as THREE from 'three'
 import type { Frame } from '../core/types'
 import { KIT, tickKit } from '../kit/anim'
 import { STORM, makeSkyMaterial, skyColor, skyScalar } from './sky'
-import { FarField, HAZE } from './far'
+import { FarField, HAZE, type NdcRect } from './far'
+
+export type { NdcRect } from './far'
 
 /*
  * The shared sky for Hark Town — a miniature world floating in daylight.
@@ -12,8 +14,10 @@ import { FarField, HAZE } from './far'
  *    the islands fading into warm haze — which is what the telephoto,
  *    looking-down chapter cameras mostly see behind their island.
  *  - far field: big soft clouds drifting below the islands and a few tiny
- *    distant floating islands, wrapped around the camera and kept clear of
- *    the island on screen (params.focus).
+ *    distant floating islands on slow rings around params.focus. The islands
+ *    keep off the copy column (left of a landscape screen), off the chapter's
+ *    island (~shadowSize around focus) and out of params.keepOut, an extra
+ *    screen rect a chapter can publish for its headline / dock.
  *  - sun: one DirectionalLight with soft PCF shadows whose frustum follows
  *    params.focus (keep params.shadowSize tight). Its arc through the day is
  *    art-directed for a camera on the +z side looking toward -z: morning
@@ -51,6 +55,16 @@ export interface WorldParams {
   sea: number
   /** override for the evening lights (-1 = automatic from time/storm) */
   glow: number
+  /**
+   * Extra screen rect the distant far-field islands must stay out of, in NDC
+   * (x right, y UP, -1..1; x0 < x1, y0 < y1), e.g. your headline or card.
+   * Cleared every frame (resetParams points it at an empty, zero-area rect),
+   * so set it each frame you want it: assign your own reused object
+   * (`wp.keepOut = rect`) or write into the one provided
+   * (`Object.assign(wp.keepOut, rect)`). null or a zero-area rect = none.
+   * The copy column is always kept clear without it. See ndcRect().
+   */
+  keepOut: NdcRect | null
 }
 
 export const WORLD_DEFAULTS = { time: 0.35, storm: 0, shadowSize: 14, sun: 1, sunAzimuth: 0, sunFollow: 0, clouds: 1, sea: 1, glow: -1 }
@@ -63,7 +77,9 @@ export class World {
   object = new THREE.Group()
   sun: THREE.DirectionalLight
   hemi: THREE.HemisphereLight
-  params: WorldParams = { ...WORLD_DEFAULTS, focus: new THREE.Vector3() }
+  /** the rect params.keepOut is reset to each frame (zero area = none) */
+  private keepNone: NdcRect = { x0: 0, y0: 0, x1: 0, y1: 0 }
+  params: WorldParams = { ...WORLD_DEFAULTS, focus: new THREE.Vector3(), keepOut: this.keepNone }
   /** current sky colours (linear), updated every frame */
   tone = {
     zenith: new THREE.Color(),
@@ -120,6 +136,9 @@ export class World {
     p.sea = WORLD_DEFAULTS.sea
     p.glow = WORLD_DEFAULTS.glow
     p.focus.set(0, 0, 0)
+    const k = this.keepNone
+    k.x0 = k.y0 = k.x1 = k.y1 = 0
+    p.keepOut = k
   }
 
   /** current (damped) time of day, 0..1 */
@@ -137,7 +156,18 @@ export class World {
     const p = this.params
     if (this.first) {
       // no fade-in from defaults on the very first frame
-      Object.assign(c, { ...p, focus: c.focus.copy(p.focus) })
+      Object.assign(c, {
+        time: p.time,
+        storm: p.storm,
+        shadowSize: p.shadowSize,
+        sun: p.sun,
+        sunAzimuth: p.sunAzimuth,
+        sunFollow: p.sunFollow,
+        clouds: p.clouds,
+        sea: p.sea,
+        glow: p.glow,
+        focus: c.focus.copy(p.focus),
+      })
       this.first = false
     }
     const k = 1 - Math.exp(-3.5 * frame.dt)
@@ -218,6 +248,21 @@ export class World {
 
     // ---- dome + far field
     this.dome.position.copy(camera.position)
-    this.far.update(KIT.uTime.value, camera.position, c.focus, c.clouds)
+    this.far.update(KIT.uTime.value, camera, c.focus, c.clouds, Math.max(3, c.shadowSize), p.keepOut, frame.dt)
   }
+}
+
+/**
+ * A DOM rect (client px) → NDC rect relative to the canvas rect `host`
+ * (y flipped to point up), grown by `pad` px on every side.
+ *   world.params.keepOut = ndcRect(head.getBoundingClientRect(), canvas.getBoundingClientRect(), this.keep)
+ * Measure on resize / when the copy moves, not every frame.
+ */
+export function ndcRect(r: { left: number; top: number; right: number; bottom: number }, host: { left: number; top: number; width: number; height: number }, out: NdcRect = { x0: 0, y0: 0, x1: 0, y1: 0 }, pad = 12): NdcRect {
+  const w = host.width || 1, h = host.height || 1
+  out.x0 = ((r.left - pad - host.left) / w) * 2 - 1
+  out.x1 = ((r.right + pad - host.left) / w) * 2 - 1
+  out.y0 = 1 - ((r.bottom + pad - host.top) / h) * 2
+  out.y1 = 1 - ((r.top - pad - host.top) / h) * 2
+  return out
 }

@@ -6,7 +6,7 @@ import { SECTIONS, TESTIMONIALS } from '../../content'
 import { TownSquare, softCloud, spring } from './square'
 import { Crowd } from './people'
 import { Bubble, type Insets, type Side } from './bubble'
-import { breathe } from './batch'
+import { nextFrame } from '../../core/yield'
 import './voices.css'
 
 /*
@@ -20,14 +20,16 @@ import './voices.css'
  * their feet, the people nearby turn to listen, and a comic speech bubble
  * pops out of their head with the quote.
  *
- *   0.00–0.055  in-beat: the camera sinks out of cloud onto the island, the
+ *   0.00–0.06   in-beat (under the cut's cloud wipe, which clears at 0.06 =
+ *               0.18 vh): the camera sinks out of cloud onto the island, the
  *               crowd and umbrellas pop up
- *   0.00–0.08   header 'We listen. They talk.' + eyebrow, map pins over the
- *               eight speakers (click one to jump to it)
- *   0.08–0.94   eight beats (~0.1075 each); the camera holds on the speaker
- *               for the middle ~half of each beat and glides between them
- *   0.90–1.00   out-beat: lamps and bunting bulbs flick on in the evening
- *               light, the camera rises into the clouds
+ *   0.03–0.135  header 'We listen. They talk.' + eyebrow; from 0.06 (the nav
+ *               landing, a clear frame) the camera holds the overview and map
+ *               pins sit over the eight speakers (click one to jump to it)
+ *   0.135–0.94  eight beats (~0.1 each); the camera holds on the speaker for
+ *               the middle ~half of each beat and glides between them
+ *   0.88–1.00   out-beat: lamps, bunting bulbs and windows light up in the
+ *               evening light, the camera rises into the clouds
  *
  * The camera, crowd and scene are pure functions of `local` (+ idle time).
  * The bubbles are time-driven from the scroll position's wish so a card that
@@ -36,18 +38,22 @@ import './voices.css'
  */
 
 const N = TESTIMONIALS.length
-const B0 = 0.08
+const B0 = 0.135
 const B1 = 0.94
 const SPAN = (B1 - B0) / N
 const HYST = 0.006
 /** camera holds on a speaker over this part of its beat */
 const HOLD_A = 0.24
 const HOLD_B = 0.7
-const IN_END = 0.055
-const OV_END = 0.064
+/** the camera settles on the overview just as the cut clears (nav landing 0.06) */
+const IN_END = 0.064
+/** overview hold (pins live) ends; the drone glides down to the first speaker */
+const OV_END = 0.12
+const PINS_A = 0.045
+const PINS_B = OV_END + 0.008
 const OUT_START = 0.922
-/** the header rises once the cut's clouds have mostly parted */
-const HEAD_IN = 0.018
+/** the header rises once the cut's clouds have half parted */
+const HEAD_IN = 0.03
 /** bubble timing (s) */
 const GAP = 0.18
 const SETTLE = 0.5
@@ -99,6 +105,8 @@ export default function create(): Chapter {
   const pins: HTMLButtonElement[] = []
   let probe: HTMLElement
   const ins: Insets = { top: 90, bottom: 90, left: 24, right: 24 }
+  /** probe offsets are re-read only when the stage or viewport resizes */
+  let insDirty = true
   let insW = -1
   let insH = -1
   let stageEl: HTMLElement
@@ -156,13 +164,22 @@ export default function create(): Chapter {
     return { W, H, aspect, dock, fov: dock ? 18 : 16 }
   }
 
-  function measureInsets() {
+  /**
+   * The probe's CSS insets only change with the viewport, so the layout read
+   * happens once per resize (ResizeObserver, or the engine's frame size as a
+   * fallback), never per frame after the bubbles have written to the DOM.
+   */
+  function measureInsets(f: Frame) {
     if (!probe) return
+    if (f.width !== insW || f.height !== insH) {
+      insW = f.width
+      insH = f.height
+      insDirty = true
+    }
+    if (!insDirty) return
+    insDirty = false
     const w = stageEl.clientWidth
     const h = stageEl.clientHeight
-    if (w === insW && h === insH) return
-    insW = w
-    insH = h
     ins.top = probe.offsetTop
     ins.left = probe.offsetLeft
     ins.right = Math.max(0, w - probe.offsetLeft - probe.offsetWidth)
@@ -208,7 +225,8 @@ export default function create(): Chapter {
     o.x = 0
     o.y = 0.3
     o.z = 0
-    o.az = -34 + u * 5
+    // a slow drone drift while the pins are up, so the hold still answers the scroll
+    o.az = -34 + u * 9
     o.el = 47
     if (L.dock) {
       o.vh = 22.5 / L.aspect
@@ -219,6 +237,7 @@ export default function create(): Chapter {
       o.sx = 0.2 * Math.min(1, L.aspect / 1.45)
       o.sy = -0.14
     }
+    o.vh *= 1 - 0.05 * u
     return o
   }
 
@@ -390,6 +409,11 @@ export default function create(): Chapter {
     stageEl = stage
     probe = el('div', 'vo-probe', undefined, stage)
     probe.setAttribute('aria-hidden', 'true')
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => {
+        insDirty = true
+      }).observe(stage)
+    }
 
     head = el('div', 'vo-head', undefined, stage)
     const eb = el('p', 'hud-eyebrow vo-eyebrow', undefined, head)
@@ -448,7 +472,7 @@ export default function create(): Chapter {
       square = new TownSquare(ctx.mobile)
       await square.build()
       group.add(square.group)
-      await breathe()
+      await nextFrame()
       crowd = new Crowd(square.speakers, square.seats, square.keepers, square.balloonSeller, square.obstacles, ctx.mobile)
       group.add(crowd.group)
       for (let k = 0; k < N; k++) restHeads.push(crowd.speakerHeads[k].clone())
@@ -472,7 +496,7 @@ export default function create(): Chapter {
 
     onEnter() {
       entered = true
-      insW = -1
+      insDirty = true
     },
 
     onLeave() {
@@ -486,7 +510,7 @@ export default function create(): Chapter {
       const calm = ctx.reducedMotion
       const now = frame.time
       const L = layoutOf(frame)
-      measureInsets()
+      measureInsets(frame)
 
       // ---- camera for this frame (also used to project the DOM exactly)
       poseAt(local, L, pose)
@@ -519,7 +543,7 @@ export default function create(): Chapter {
       if (floor >= 0) focus.copy(restHeads[floor])
 
       // ---- scene
-      const pop = segment(local, 0.004, 0.058)
+      const pop = segment(local, 0.006, 0.058)
       const lamps = segment(local, 0.878, 0.945)
       let ringScale = 0
       if (floor >= 0) {
@@ -538,6 +562,9 @@ export default function create(): Chapter {
       w.focus.set(0, 0, 0)
       w.shadowSize = 9.6
       w.sun = 1 - lamps * 0.12
+      // windows light up with the lamps (the world's auto glow only starts
+      // past this chapter's time of day); before that, leave it on auto
+      if (lamps > 0) w.glow = lamps * 0.5
       const p = ctx.post.params
       p.focusY = clamp((1 + pose.sy) / 2, 0.2, 0.8)
       const wide = 1 - smoothstep(OV_END, OV_END + 0.02, local) + smoothstep(OUT_START, 1, local)
@@ -556,8 +583,9 @@ export default function create(): Chapter {
       }
       updateCards(local, now, calm, headOnScreen)
 
-      const pinsOn = local > 0.05 && local < 0.074
-      if (pinsOn || local < 0.12) {
+      // pins only over a clear frame: never float over the cut's cloud wipe
+      const pinsOn = local > PINS_A && local < PINS_B && Math.max(ctx.post.transition, ctx.post.fade) < 0.12
+      if (pinsOn || local < PINS_B + 0.06) {
         for (let i = 0; i < N; i++) {
           const pin = pins[i]
           if (pin.classList.contains('is-on') !== pinsOn) pin.classList.toggle('is-on', pinsOn)

@@ -6,6 +6,7 @@ import { World } from '../world/World'
 import { clamp, damp } from './math'
 import { buildChapterCopy } from './srContent'
 import { nextFrame } from './yield'
+import { splitInstancing } from '../kit/util'
 import type { CameraPose, Chapter, ChapterContext, ChapterDef, Frame } from './types'
 
 export interface ChapterSlot {
@@ -299,6 +300,12 @@ export class Engine {
       slot.chapter.group.visible = false
       this.scene.add(slot.chapter.group)
       this.keyboardViaCopyLayer(slot.stage)
+      // instanced meshes get their own material instances (no per-frame shader re-selection)
+      try {
+        splitInstancing(slot.chapter.group)
+      } catch {
+        /* best-effort */
+      }
       await nextFrame()
     }
     for (const slot of this.slots) if (!slot.chapter.group.parent) this.scene.add(slot.chapter.group)

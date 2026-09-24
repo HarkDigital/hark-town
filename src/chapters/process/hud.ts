@@ -1,11 +1,11 @@
 import { el, rise, setRise } from '../../core/dom'
 import { PROCESS } from '../../content'
-import { HOARD_STATS } from './textures'
+import { FENCE_STATS } from './textures'
 
 /*
  * Building Site HUD: the chapter headline, then a wayfinding sign plate —
  * "Step 0N / 04", the step's name and text, a four-step progress track —
- * which swaps for a stats plate when the hoarding panels revolve.
+ * which swaps for a stats plate when the site-fence panels revolve.
  * Visual layer only (the stage is aria-hidden; srContent carries the copy).
  */
 
@@ -28,6 +28,14 @@ export interface Band {
   r: number
   t: number
   b: number
+}
+
+/** A screen box in px (stage space). */
+export interface Box {
+  left: number
+  top: number
+  right: number
+  bottom: number
 }
 
 export interface Layout {
@@ -64,6 +72,12 @@ export class SiteHud {
   private statRows: { row: HTMLElement; v: HTMLElement }[] = []
   private probe: HTMLElement
   private last = ''
+  /** copy boxes (px) from the last layout(), for the world's far-field keep-out */
+  boxes: { head: Box; plate: Box; stats: Box } = {
+    head: { left: 0, top: 0, right: 0, bottom: 0 },
+    plate: { left: 0, top: 0, right: 0, bottom: 0 },
+    stats: { left: 0, top: 0, right: 0, bottom: 0 },
+  }
 
   constructor(stage: HTMLElement) {
     this.root = el('div', 'pc', undefined, stage)
@@ -105,9 +119,9 @@ export class SiteHud {
     const stats = (this.statsBox = el('div', 'pc-stats hud-panel', undefined, this.dock))
     el('span', 'pc-screw pc-screw--l', undefined, stats)
     el('span', 'pc-screw pc-screw--r', undefined, stats)
-    el('p', 'hud-eyebrow pc-stats-eyebrow', 'On the hoarding', stats)
+    el('p', 'hud-eyebrow pc-stats-eyebrow', 'On the site fence', stats)
     const list = el('ol', 'pc-stat-list', undefined, stats)
-    HOARD_STATS.forEach(s => {
+    FENCE_STATS.forEach(s => {
       const row = el('li', 'pc-stat', undefined, list)
       const v = rise(el('p', 'pc-sv', undefined, row), s.value)
       el('p', 'pc-sl', s.label, row)
@@ -155,6 +169,9 @@ export class SiteHud {
     })
     textRight = Math.max(textRight, box(this.eyebrow).right)
     const dock = box(this.dock)
+    Object.assign(this.boxes.head, head, { right: Math.min(head.right, textRight) })
+    Object.assign(this.boxes.plate, box(this.plate))
+    Object.assign(this.boxes.stats, box(this.statsBox))
     if (portrait) {
       const top = head.bottom + 22
       const bare = safeTop - 16

@@ -38,6 +38,9 @@ export interface HudMetrics {
   introTop: number
   safeTop: number
   safeBottom: number
+  /** copy boxes (px), for the world's far-field keep-out */
+  plateBox: { left: number; top: number; right: number; bottom: number }
+  introBox: { left: number; top: number; right: number; bottom: number }
 }
 
 export interface HudState {
@@ -62,7 +65,19 @@ export class Hud {
   private last = -2
   private lastPins = -1
   private dirty = true
-  private m: HudMetrics = { w: 0, h: 0, tall: false, colRight: 0, colTop: 0, introRight: 0, introTop: 0, safeTop: 0, safeBottom: 0 }
+  private m: HudMetrics = {
+    w: 0,
+    h: 0,
+    tall: false,
+    colRight: 0,
+    colTop: 0,
+    introRight: 0,
+    introTop: 0,
+    safeTop: 0,
+    safeBottom: 0,
+    plateBox: { left: 0, top: 0, right: 0, bottom: 0 },
+    introBox: { left: 0, top: 0, right: 0, bottom: 0 },
+  }
 
   constructor(
     private stage: HTMLElement,
@@ -137,6 +152,19 @@ export class Hud {
       m.introTop = this.intro.offsetTop
       m.safeTop = this.probe.offsetTop
       m.safeBottom = m.h - (this.probe.offsetTop + this.probe.offsetHeight)
+      const pb = m.plateBox
+      pb.left = this.col.offsetLeft + this.plate.offsetLeft
+      pb.top = m.colTop
+      pb.right = pb.left + this.plate.offsetWidth
+      pb.bottom = pb.top + this.plate.offsetHeight
+      const ib = m.introBox
+      ib.left = this.intro.offsetLeft
+      // the intro column spans the safe height; keep only its inked content
+      const first = this.intro.firstElementChild as HTMLElement | null
+      const last = this.intro.lastElementChild as HTMLElement | null
+      ib.top = this.intro.offsetTop + (first ? first.offsetTop : 0)
+      ib.right = m.introRight
+      ib.bottom = this.intro.offsetTop + (last ? last.offsetTop + last.offsetHeight : this.intro.offsetHeight)
       if (!m.h) this.dirty = true
     }
     return this.m

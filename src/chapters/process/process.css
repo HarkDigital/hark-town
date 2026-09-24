@@ -57,7 +57,7 @@
 .stage-process .pc-title {
   font-size: clamp(2.2rem, 4.1vw, 4.3rem);
   line-height: 0.98;
-  text-shadow: 0 1px 0 rgba(251, 250, 246, 0.6), 0 0 28px rgba(251, 250, 246, 0.55);
+  /* the shared .hud-h2 halo (base.css) keeps it legible over the clouds */
 }
 
 /* ---- the dock: step plate and stats plate share one cell */

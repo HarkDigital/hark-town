@@ -1,8 +1,9 @@
 import * as THREE from 'three'
 import type { CameraPose, Chapter, ChapterContext, Frame } from '../../core/types'
 import { clamp, lerp, smoothstep } from '../../core/math'
+import { nextFrame } from '../../core/yield'
 import { Site } from './site'
-import { SiteHud, type Band } from './hud'
+import { SiteHud, type Band, type Box } from './hud'
 import { makeTextures, whenSignFontsReady } from './textures'
 import * as T from './timeline'
 import './process.css'
@@ -10,29 +11,36 @@ import './process.css'
 /*
  * BUILDING SITE — "We listen first. Then we build." (see timeline.ts for the
  * beat sheet). One building goes up in four steps on a floating island at
- * golden hour; the hoarding panels revolve to show the stats; the camera
+ * golden hour; the site-fence panels revolve to show the stats; the camera
  * climbs back into the clouds.
  */
 
 const DEG = Math.PI / 180
 
-/** Yield a frame between heavy init steps (rAF never fires in a hidden tab, so time out too). */
-const yieldFrame = () =>
-  new Promise<void>(resolve => {
-    let done = false
-    const go = () => {
-      if (!done) {
-        done = true
-        resolve()
-      }
-    }
-    if (typeof document !== 'undefined' && document.hidden) {
-      setTimeout(go, 0)
-      return
-    }
-    requestAnimationFrame(go)
-    setTimeout(go, 120)
-  })
+/** An NDC rect: x0/x1 left/right, y0 bottom, y1 top. */
+interface NdcRect {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+
+/**
+ * Publish the copy box to the world's far-field keep-out (world.params.keepOut,
+ * an NDC rect, y up, reset to null every frame) so distant islets never drift
+ * behind the words. Guarded, in case the world holds another shape.
+ */
+function publishKeepOut(wp: object, r: NdcRect) {
+  const holder = wp as { keepOut?: unknown }
+  const ko = holder.keepOut
+  if (ko instanceof THREE.Vector4) ko.set(r.x0, r.y0, r.x1, r.y1)
+  else if (ko instanceof THREE.Box2) {
+    ko.min.set(r.x0, r.y0)
+    ko.max.set(r.x1, r.y1)
+  } else if (ko && typeof ko === 'object') {
+    if (ko !== r) Object.assign(ko, r)
+  } else holder.keepOut = r
+}
 
 const _dir = new THREE.Vector3()
 const _right = new THREE.Vector3()
@@ -79,6 +87,14 @@ export default function create(): Chapter {
   let measure: (() => void) | null = null
   const fills = [0, 0, 0, 0]
   const stats = [false, false, false]
+  const keep: NdcRect = { x0: -2, y0: -2, x1: -2, y1: -2 }
+  const box = { left: 0, top: 0, right: 0, bottom: 0 }
+  const grow = (b: Box, first: boolean) => {
+    box.left = first ? b.left : Math.min(box.left, b.left)
+    box.top = first ? b.top : Math.min(box.top, b.top)
+    box.right = first ? b.right : Math.max(box.right, b.right)
+    box.bottom = first ? b.bottom : Math.max(box.bottom, b.bottom)
+  }
 
   /** local where the step plate arrives (later on short phones: headline first) */
   const plateFrom = () => (shortSteps ? 0.135 : T.STEPS[0][0] + 0.004)
@@ -92,9 +108,9 @@ export default function create(): Chapter {
       hud = new SiteHud(ctx.stage)
       const aniso = Math.min(8, ctx.renderer.capabilities.getMaxAnisotropy())
       const tex = makeTextures(aniso, ctx.mobile)
-      await yieldFrame()
+      await nextFrame()
       site = new Site(ctx.mobile, tex)
-      await site.build(yieldFrame)
+      await site.build(nextFrame)
       group.add(site.root)
       // painted signs pick up the web fonts once they're in
       void whenSignFontsReady().then(() => tex.redraw())
@@ -167,16 +183,28 @@ export default function create(): Chapter {
         const step = T.stepAt(l)
         for (let i = 0; i < 4; i++) fills[i] = T.stepProgress(l, i)
         const plate = l >= pf && l < T.STEPS[3][1]
-        for (let i = 0; i < 3; i++) stats[i] = l >= T.STATS_AT[i] + 0.004 && l < T.HUD_OUT
         const statsOn = l >= T.STATS_AT[0] - 0.004 && l < T.HUD_OUT
-        hud.update({
-          head: l >= T.HEAD_IN && l < T.HUD_OUT && !(shortSteps && plate) && !(shortStats && statsOn),
-          plate,
-          step: plate ? step : -1,
-          fills,
-          statsOn,
-          stats,
-        })
+        // the first row arrives with the plate (never an empty plate), the rest with their panels
+        for (let i = 0; i < 3; i++) stats[i] = i === 0 ? statsOn : l >= T.STATS_AT[i] + 0.004 && l < T.HUD_OUT
+        const head = l >= T.HEAD_IN && l < T.HUD_OUT && !(shortSteps && plate) && !(shortStats && statsOn)
+        hud.update({ head, plate, step: plate ? step : -1, fills, statsOn, stats })
+
+        // ---- keep the world's distant islets out from behind the copy: the
+        // headline (plus, beside it in landscape, whichever plate is up)
+        const bx = hud.boxes
+        let n = 0
+        if (head) grow(bx.head, n++ === 0)
+        if ((!portrait || !n) && plate) grow(bx.plate, n++ === 0)
+        if ((!portrait || !n) && statsOn) grow(bx.stats, n++ === 0)
+        const W = Math.max(1, frame.width)
+        if (n) {
+          const pad = 14
+          keep.x0 = (2 * (box.left - pad)) / W - 1
+          keep.x1 = (2 * (box.right + pad)) / W - 1
+          keep.y1 = 1 - (2 * (box.top - pad)) / H
+          keep.y0 = 1 - (2 * (box.bottom + pad)) / H
+          publishKeepOut(w, keep)
+        }
       }
     },
 

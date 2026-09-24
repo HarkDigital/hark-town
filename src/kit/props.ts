@@ -11,6 +11,8 @@
  *       island.add(mergeStatic(town))          // 1–3 draw calls total
  *   - many copies of one piece instance into one draw call:
  *       scatter(treeGeometry(4), clayVC(), points, { castShadow: true })
+ *     (scatter swaps in the instanced twin; for your own InstancedMesh use
+ *     clayVC({ instanced: true }), + instanceColor: true with setColorAt)
  *   - windows, lamp bulbs and headlights carry a `glow` attribute and light
  *     up warm at dusk automatically (the World drives KIT.uGlow from the
  *     time of day / storm). Hark LEDs use MAT.led (always on, blooms).
@@ -81,20 +83,29 @@
  *   scatter(geometry, material, points, { seed, scale, rotate, colors,
  *           castShadow, receiveShadow })  → InstancedMesh
  *   mergeStatic(root, { keep })  → merged Group (one mesh per material)
+ *   splitInstancing(root)  InstancedMeshes on a shared kit material get its
+ *       instanced twin (clayVC({ instanced: true }) etc.): call once after
+ *       building so no material is drawn both plain and instanced
  *
  * Also: palette.ts (C, WALLS, ROOFS, SHIRTS, CARS, clay, clayVC, MAT,
- * shadowed), anim.ts (KIT uniforms, spin), geo.ts (Builder for your own
+ * shadowed, instancedTwin), anim.ts (KIT uniforms, spin), geo.ts (Builder for your own
  * vertex-coloured pieces: b.box / b.rbox / b.cyl / b.sphere / b.cone /
- * b.add(geo, colour|paint, xf, glow) / b.addPainted(kitGeo, xf) → b.build();
- * paint helpers vgrad, twoTone; noise vnoise2 / fbm2). A house builds in
- * ~0.4 ms (~1.5 ms at 4x throttle).
+ * b.add(geo, colour|paint, xf, glow) / b.addPainted(kitGeo, xf) → b.build(),
+ * which welds identical vertices into an INDEXED geometry (~3.7x fewer
+ * vertices; b.build({ index: false }) for the flat triangle soup); paint
+ * helpers vgrad, twoTone; noise vnoise2 / fbm2). A house builds in ~0.4 ms
+ * (~1.5 ms at 4x throttle).
  *
  * WORLD (src/world/World.ts) — set every frame you care:
  *   world.params.time (0 dawn · .28 morning · .5 noon · .76 golden · .9 sunset
  *   · 1 dusk), storm, focus (island centre: shadows + far field follow it),
  *   shadowSize (tight!), sun, sunAzimuth (rad), sunFollow (0..1: lock the
  *   sun to the camera's orbit), clouds (0..1 far clouds/islands), sea (0..1
- *   cloud sea), glow (-1 auto, else 0..1 evening lights).
+ *   cloud sea), glow (-1 auto, else 0..1 evening lights), keepOut (an NDC
+ *   rect {x0, y0, x1, y1}, y up, that the distant far-field islands stay out
+ *   of: your headline / card; cleared every frame; ndcRect() in World.ts
+ *   converts a DOM rect). The islands always avoid the copy column and the
+ *   chapter's island on their own.
  *   world.tone.{zenith, horizon, sun, haze} and world.sunDir are readable.
  */
 export { makeIsland, islandPoints } from './island'
@@ -125,7 +136,7 @@ export type { PathPoint, RoadOptions, SignOptions } from './street'
 export { makeCar, carColor, makeTram, makeBoat, makeBalloon } from './vehicles'
 export { makePerson, personGeometry, makeCrowd } from './people'
 export type { Crowd } from './people'
-export { scatter, mergeStatic } from './util'
+export { scatter, mergeStatic, splitInstancing } from './util'
 export type { ScatterPoint, ScatterOptions } from './util'
 export { spin, KIT } from './anim'
 export { Builder } from './geo'

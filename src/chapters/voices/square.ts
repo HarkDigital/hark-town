@@ -4,7 +4,8 @@ import { makeHouse, makeIsland, makeTower, makeTree, makeBush } from '../../kit/
 import { logoGeometry, logoShapes } from '../../logo/logo'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { clamp, rng, smoothstep } from '../../core/math'
-import { StaticBatch, breathe, paint } from './batch'
+import { StaticBatch, paint } from './batch'
+import { nextFrame } from '../../core/yield'
 
 /*
  * THE TOWN SQUARE — a round cobbled plaza on its own floating island: a
@@ -145,30 +146,30 @@ export class TownSquare {
     kerbSide.position.y = Y0 / 2 - 0.025
     batch.add(kerbSide, { cast: false, receive: true })
 
-    await breathe()
+    await nextFrame()
 
     // ---------------------------------------------------------- fountain
     this.buildFountain(batch)
-    await breathe()
+    await nextFrame()
 
     // ---------------------------------------------------------- buildings
     await this.buildTown(batch)
-    await breathe()
+    await nextFrame()
 
     // ---------------------------------------------------------- spots + dressing
     this.buildSpots(batch)
     this.buildCafe(batch)
     this.buildMarket(batch)
-    await breathe()
+    await nextFrame()
     this.buildTrees(batch)
     this.buildLampsAndBunting(batch)
     this.buildBalloons()
     this.buildWildlife()
-    await breathe()
+    await nextFrame()
 
     // ---------------------------------------------------------- sky dressing
     this.buildSky(batch)
-    await breathe()
+    await nextFrame()
 
     batch.build(this.group)
 
@@ -372,10 +373,10 @@ export class TownSquare {
       [95, 1.3, 1.75, 1.2, WALLS.mint, C.roofRed, 'gable'],
       [123, 1.5, 1.3, 1.3, WALLS.powder, C.roofInk, 'gable'],
     ]
-    await breathe()
+    await nextFrame()
     for (let i = 0; i < houses.length; i++) {
       const [theta, w, h, d, wall, roof, style] = houses[i]
-      if (i === 5) await breathe()
+      if (i === 5) await nextFrame()
       put(makeHouse({ w, h, d, wall, roof, style, seed: 11 + i }), theta, R + (i % 2) * 0.15)
       // chimneys on some gables
       if (style === 'gable' && i % 3 !== 1) {

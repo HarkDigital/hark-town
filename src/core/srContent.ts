@@ -66,7 +66,7 @@ const COPY: Record<string, () => string> = {
     <p>How we work</p>
     <h2>We listen first. Then we build.</h2>
     <ol>${PROCESS.map((p, i) => `<li><h3>${stop('process', i, p.title)}</h3><p>${esc(p.text)}</p></li>`).join('')}</ol>
-    <ul>${[STATS[0], STATS[2], STATS[1]].map(s => `<li>${esc(s.value)}: ${esc(s.label)}</li>`).join('')}</ul>`,
+    <ul>${[STATS[0], STATS[2], STATS[1]].map((s, i) => `<li>${i === 0 ? stop('process', 4, `${s.value}: ${s.label}`) : `${esc(s.value)}: ${esc(s.label)}`}</li>`).join('')}</ul>`,
 
   contact: () => `
     <h2>${esc(CONTACT.title)}</h2>
@@ -91,7 +91,7 @@ export function buildChapterCopy(id: string, visible = false): HTMLElement | nul
       const hark = window.__hark
       if (!hark) return
       e.preventDefault()
-      if (target === 'hero') hark.goto(0)
+      if (target === 'hero') hark.land('hero')
       else hark.land(target)
       hark.engine.focusChapter(target)
     }),

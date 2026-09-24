@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { CameraPose, Chapter, ChapterContext, Frame } from '../../core/types'
 import { clamp, ease, lerp, smoothstep } from '../../core/math'
+import { nextFrame } from '../../core/yield'
 import { makeAtlas } from './atlas'
 import { jiggle } from './bake'
 import { setAtlas } from './workshops'
@@ -38,25 +39,33 @@ import './services.css'
  * the clouds for the cut.
  */
 
-const nextFrame = () =>
-  new Promise<void>(resolve => {
-    let done = false
-    const r = () => {
-      if (!done) {
-        done = true
-        resolve()
-      }
-    }
-    if (document.hidden) {
-      setTimeout(r, 0)
-      return
-    }
-    requestAnimationFrame(r)
-    setTimeout(r, 120)
-  })
+/** An NDC rect: x0/x1 left/right, y0 bottom, y1 top. */
+interface NdcRect {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+
+/**
+ * Publish the copy box to the world's far-field keep-out (world.params.keepOut,
+ * an NDC rect, y up, reset to null every frame) so distant islets never drift
+ * behind the words. Guarded, in case the world holds another shape.
+ */
+function publishKeepOut(wp: object, r: NdcRect) {
+  const holder = wp as { keepOut?: unknown }
+  const ko = holder.keepOut
+  if (ko instanceof THREE.Vector4) ko.set(r.x0, r.y0, r.x1, r.y1)
+  else if (ko instanceof THREE.Box2) {
+    ko.min.set(r.x0, r.y0)
+    ko.max.set(r.x1, r.y1)
+  } else if (ko && typeof ko === 'object') {
+    if (ko !== r) Object.assign(ko, r)
+  } else holder.keepOut = r
+}
 
 function overviewShot(out: Shot) {
-  const c = OVERVIEW.centre
+  const c = OVERVIEW.center
   return Object.assign(
     out,
     shot({
@@ -125,6 +134,7 @@ export default function create(): Chapter {
   const focus = new THREE.Vector3()
   const balloonAt = new THREE.Vector3()
   const ray = new THREE.Raycaster()
+  const keep: NdcRect = { x0: -2, y0: -2, x1: -2, y1: -2 }
 
   const jumpTo = (k: number) => {
     const eng = window.__hark?.engine
@@ -324,6 +334,20 @@ export default function create(): Chapter {
 
       /* ---------------- HUD ---------------- */
       hud.update({ intro, shown, pins })
+      // keep the world's distant islets out from behind the plate / intro copy
+      {
+        const m = hud.metrics()
+        const bx = shown >= 0 ? m.plateBox : intro ? m.introBox : null
+        const W = Math.max(1, frame.width), H = Math.max(1, frame.height)
+        if (bx && bx.right > bx.left) {
+          const pad = 14
+          keep.x0 = (2 * (bx.left - pad)) / W - 1
+          keep.x1 = (2 * (bx.right + pad)) / W - 1
+          keep.y1 = 1 - (2 * (bx.top - pad)) / H
+          keep.y0 = 1 - (2 * (bx.bottom + pad)) / H
+          publishKeepOut(wp, keep)
+        }
+      }
       if (pins) {
         projCam.fov = pose.fov
         projCam.aspect = aspect

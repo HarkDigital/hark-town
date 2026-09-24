@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { rng } from '../../core/math'
 import { C } from '../../kit/palette'
-import { Kit, ball, cellPlane, prism, Spring, breathe } from './kit'
+import { Kit, ball, cellPlane, prism, Spring } from './kit'
+import { nextFrame } from '../../core/yield'
 import {
   ARCH_CELL,
   DEST_CELL,
@@ -52,6 +53,9 @@ export interface Board {
   /** flips 0 → π about x: green "Stop" face → the website */
   flip: THREE.Group
   screen: THREE.MeshBasicMaterial
+  /** a paper-blank wash over the screen once the tram has moved on (opacity 0..1) */
+  blank: THREE.MeshBasicMaterial
+  blankMesh: THREE.Mesh
   spring: Spring
   /** world-ish (street space) centre, for camera framing */
   center: THREE.Vector3
@@ -201,12 +205,23 @@ function buildBoard(k: number, mats: Mats, placeholder: THREE.Texture): Board {
   flip.add(fk.build({ cast: false }))
   const screen = new THREE.MeshBasicMaterial({ map: placeholder })
   decal(screen)
-  const sm = new THREE.Mesh(new THREE.PlaneGeometry(W, H), screen)
+  const plane = new THREE.PlaneGeometry(W, H)
+  const sm = new THREE.Mesh(plane, screen)
   sm.rotation.x = Math.PI
   sm.position.z = -0.02
   flip.add(sm)
+  // once the tram moves on, the site washes out to blank paper, so the next
+  // stop's plate never sits over another client's live screen
+  const blank = new THREE.MeshBasicMaterial({ map: placeholder, transparent: true, opacity: 0, depthWrite: false })
+  decal(blank)
+  const bm = new THREE.Mesh(plane, blank)
+  bm.rotation.x = Math.PI
+  bm.position.z = -0.035
+  bm.renderOrder = 1
+  bm.visible = false
+  flip.add(bm)
   root.add(flip)
-  return { root, flip, screen, spring: new Spring(95, 7.5), center: new THREE.Vector3() }
+  return { root, flip, screen, blank, blankMesh: bm, spring: new Spring(95, 7.5), center: new THREE.Vector3() }
 }
 
 // ------------------------------------------------------------------ shops
@@ -1075,11 +1090,11 @@ export async function buildTown(signage: Signage, mobile: boolean, placeholder: 
   const flat = new Kit()
   streetFlat(flat)
   root.add(flat.build({ cast: false }))
-  await breathe()
+  await nextFrame()
   const furn = new Kit()
   const wires = new Kit()
   streetFurniture(furn, wires)
-  await breathe()
+  await nextFrame()
   terminus(furn, mats)
   market(furn, mats)
   const sails = windmill(furn)
@@ -1087,12 +1102,12 @@ export async function buildTown(signage: Signage, mobile: boolean, placeholder: 
   root.add(wires.build({ cast: false }))
   root.add(furn.build())
   root.add(sails)
-  await breathe()
+  await nextFrame()
 
   const back = new Kit()
   backdrop(back)
   root.add(back.build())
-  await breathe()
+  await nextFrame()
 
   // shops
   const smoke = new THREE.InstancedMesh(ball(1, 1), new THREE.MeshStandardMaterial({ color: '#f4f1ea', roughness: 1 }), mobile ? 5 : 8)
@@ -1110,7 +1125,7 @@ export async function buildTown(signage: Signage, mobile: boolean, placeholder: 
   const anims: ((t: number, calm: boolean) => void)[] = []
   const pokeables: Town['pokeables'] = []
   for (let k = 0; k < makers.length; k++) {
-    if (k % 2 === 0 && k > 0) await breathe()
+    if (k % 2 === 0 && k > 0) await nextFrame()
     const b = makers[k]()
     const g = new THREE.Group()
     const body = b.kit.build()
@@ -1128,7 +1143,7 @@ export async function buildTown(signage: Signage, mobile: boolean, placeholder: 
     pokeables.push({ mesh: body, popper: p })
     if (b.anim) anims.push(b.anim)
   }
-  await breathe()
+  await nextFrame()
 
   // filler houses in the gaps (set back a little so the shops lead)
   const fillers: Popper[] = []
@@ -1148,7 +1163,7 @@ export async function buildTown(signage: Signage, mobile: boolean, placeholder: 
     fillers.push(p)
     pokeables.push({ mesh: body, popper: p })
   })
-  await breathe()
+  await nextFrame()
 
   // market stalls
   const stalls: Popper[] = []
@@ -1160,7 +1175,7 @@ export async function buildTown(signage: Signage, mobile: boolean, placeholder: 
     stalls.push(p)
     pokeables.push({ mesh: g, popper: p })
   })
-  await breathe()
+  await nextFrame()
 
   const tram = buildTram(mats)
   tram.position.set(L.TERMINUS_X, L.RAIL_Y, 0)

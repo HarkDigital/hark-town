@@ -3,8 +3,10 @@ import * as THREE from 'three'
 /*
  * Vertex-colour geometry builder. Kit props are assembled from primitive
  * parts, each painted with a flat colour (or a paint function for gradients)
- * and merged into ONE non-indexed BufferGeometry with position / normal /
- * color / glow attributes — drawn with the shared clayVC() material.
+ * and merged into ONE indexed BufferGeometry with position / normal / color /
+ * glow attributes — drawn with the shared clayVC() material. Identical
+ * vertices are welded (exact match on all four attributes, so hard edges and
+ * colour seams stay sharp): ~3.7x fewer vertices than the flat soup.
  *
  *   const b = new Builder()
  *   b.add(new THREE.BoxGeometry(1, 1, 1), C.white, { y: 0.5 })
@@ -56,7 +58,8 @@ export function col(hex: string) {
 }
 
 /**
- * Normalise a geometry for merging: non-indexed; only position, normal,
+ * Normalise a geometry for merging: one vertex per triangle corner (with an
+ * identity index, so it merges with Builder output), only position, normal,
  * color, glow. Consumes `geo` (disposes it).
  */
 export function paint(
@@ -100,6 +103,10 @@ export function paint(
   const gl = new Float32Array(n)
   if (glow) gl.fill(glow)
   g.setAttribute('glow', new THREE.BufferAttribute(gl, 1))
+  // identity index: Builder output is indexed, and mergeGeometries needs all or none
+  const idx = n > 65535 ? new Uint32Array(n) : new Uint16Array(n)
+  for (let i = 0; i < n; i++) idx[i] = i
+  g.setIndex(new THREE.BufferAttribute(idx, 1))
   return g
 }
 
@@ -159,8 +166,9 @@ const _mx = new THREE.Matrix4()
 
 /**
  * Collects painted parts straight into growing typed arrays (no per-part
- * geometry clones or merges) and emits ONE non-indexed geometry with
- * position / normal / color / glow.
+ * geometry clones or merges) and emits ONE geometry with position / normal /
+ * color / glow, welded into an indexed mesh (build({ index: false }) for the
+ * flat triangle soup).
  */
 export class Builder {
   private pos = new Float32Array(3 * 4096)
@@ -334,18 +342,119 @@ export class Builder {
     return this.n === 0
   }
 
-  build(): THREE.BufferGeometry {
+  /**
+   * Emit the geometry and reset the builder. Welds bit-identical vertices
+   * (position + normal + color + glow) into an indexed mesh; `index: false`
+   * returns the flat, non-indexed triangle soup instead.
+   */
+  build(o: { index?: boolean } = {}): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry()
     const n = this.n
-    g.setAttribute('position', new THREE.BufferAttribute(this.pos.slice(0, n * 3), 3))
-    g.setAttribute('normal', new THREE.BufferAttribute(this.nor.slice(0, n * 3), 3))
-    g.setAttribute('color', new THREE.BufferAttribute(this.colr.slice(0, n * 3), 3))
-    g.setAttribute('glow', new THREE.BufferAttribute(this.glw.slice(0, n), 1))
+    if (o.index === false) {
+      g.setAttribute('position', new THREE.BufferAttribute(this.pos.slice(0, n * 3), 3))
+      g.setAttribute('normal', new THREE.BufferAttribute(this.nor.slice(0, n * 3), 3))
+      g.setAttribute('color', new THREE.BufferAttribute(this.colr.slice(0, n * 3), 3))
+      g.setAttribute('glow', new THREE.BufferAttribute(this.glw.slice(0, n), 1))
+    } else {
+      const w = weld(this.pos, this.nor, this.colr, this.glw, n)
+      g.setAttribute('position', new THREE.BufferAttribute(w.pos, 3))
+      g.setAttribute('normal', new THREE.BufferAttribute(w.nor, 3))
+      g.setAttribute('color', new THREE.BufferAttribute(w.col, 3))
+      g.setAttribute('glow', new THREE.BufferAttribute(w.glow, 1))
+      g.setIndex(new THREE.BufferAttribute(w.index, 1))
+    }
     this.n = 0
     g.computeBoundingSphere()
     g.computeBoundingBox()
     return g
   }
+}
+
+/** -0 → +0 so bit-exact matching sees them as equal. */
+function unsign(a: Float32Array, len: number) {
+  for (let i = 0; i < len; i++) if (a[i] === 0) a[i] = 0
+}
+
+/**
+ * Weld bit-identical vertices (all four attributes) with an open-addressing
+ * hash over the raw float bits. Exact matching never merges across a hard
+ * edge or a colour seam (their normals / colours differ), so the mesh renders
+ * identically; ~40 ns a vertex.
+ */
+function weld(P: Float32Array, N: Float32Array, Cc: Float32Array, G: Float32Array, n: number) {
+  unsign(P, n * 3)
+  unsign(N, n * 3)
+  unsign(Cc, n * 3)
+  unsign(G, n)
+  const pu = new Uint32Array(P.buffer, P.byteOffset, n * 3)
+  const nu = new Uint32Array(N.buffer, N.byteOffset, n * 3)
+  const cu = new Uint32Array(Cc.buffer, Cc.byteOffset, n * 3)
+  const gu = new Uint32Array(G.buffer, G.byteOffset, n)
+  let size = 16
+  while (size < n * 2) size <<= 1
+  const mask = size - 1
+  const table = new Int32Array(size).fill(-1)
+  /** unique vertex → its first source vertex */
+  const src = new Int32Array(n)
+  const remap = new Uint32Array(n)
+  let u = 0
+  for (let i = 0; i < n; i++) {
+    const a = i * 3
+    // FNV-1a over the 10 words, then a murmur3 finaliser
+    let h = 0x811c9dc5 | 0
+    h = Math.imul(h ^ pu[a], 0x01000193)
+    h = Math.imul(h ^ pu[a + 1], 0x01000193)
+    h = Math.imul(h ^ pu[a + 2], 0x01000193)
+    h = Math.imul(h ^ nu[a], 0x01000193)
+    h = Math.imul(h ^ nu[a + 1], 0x01000193)
+    h = Math.imul(h ^ nu[a + 2], 0x01000193)
+    h = Math.imul(h ^ cu[a], 0x01000193)
+    h = Math.imul(h ^ cu[a + 1], 0x01000193)
+    h = Math.imul(h ^ cu[a + 2], 0x01000193)
+    h = Math.imul(h ^ gu[i], 0x01000193)
+    h ^= h >>> 16
+    h = Math.imul(h, 0x85ebca6b)
+    h ^= h >>> 13
+    h = Math.imul(h, 0xc2b2ae35)
+    h ^= h >>> 16
+    let slot = h & mask
+    for (;;) {
+      const k = table[slot]
+      if (k < 0) {
+        table[slot] = u
+        src[u] = i
+        remap[i] = u++
+        break
+      }
+      const j = src[k], b = j * 3
+      if (
+        pu[b] === pu[a] && pu[b + 1] === pu[a + 1] && pu[b + 2] === pu[a + 2] &&
+        nu[b] === nu[a] && nu[b + 1] === nu[a + 1] && nu[b + 2] === nu[a + 2] &&
+        cu[b] === cu[a] && cu[b + 1] === cu[a + 1] && cu[b + 2] === cu[a + 2] &&
+        gu[j] === gu[i]
+      ) {
+        remap[i] = k
+        break
+      }
+      slot = (slot + 1) & mask
+    }
+  }
+  const pos = new Float32Array(u * 3), nor = new Float32Array(u * 3), col = new Float32Array(u * 3), glow = new Float32Array(u)
+  for (let k = 0; k < u; k++) {
+    const j = src[k], a = j * 3, b = k * 3
+    pos[b] = P[a]
+    pos[b + 1] = P[a + 1]
+    pos[b + 2] = P[a + 2]
+    nor[b] = N[a]
+    nor[b + 1] = N[a + 1]
+    nor[b + 2] = N[a + 2]
+    col[b] = Cc[a]
+    col[b + 1] = Cc[a + 1]
+    col[b + 2] = Cc[a + 2]
+    glow[k] = G[j]
+  }
+  const index = u > 65535 ? remap : Uint16Array.from(remap)
+  return { pos, nor, col, glow, index }
 }
 
 const C_WHITE = new THREE.Color('#ffffff')

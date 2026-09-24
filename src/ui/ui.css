@@ -348,6 +348,8 @@
 
 /* sound toggle */
 .ch-sound {
+  flex: none;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 9px;
@@ -1081,8 +1083,10 @@
   }
 }
 
-/* phones: the minimap collapses to a compact readout (the menu navigates) */
-@media (max-width: 640px) {
+/* phones and narrow windows: the minimap collapses to a compact readout (the
+   menu navigates); it switches together with the Menu button. A phone held
+   sideways (after "Continue anyway" on the rotate card) gets it too. */
+@media (max-width: 720px), (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
   .ch-map {
     flex-direction: column;
     gap: 6px;
@@ -1194,6 +1198,22 @@
   }
   .ch-sound {
     padding-right: 11px;
+  }
+}
+
+/* the smallest phones: the Sound toggle keeps its label for screen readers
+   but shows just the speaker (its cross says "off"), so the readout fits */
+@media (max-width: 359px) {
+  .ch-sound {
+    padding: 0 8px;
+  }
+  .ch-sound-txt {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
@@ -1771,6 +1791,16 @@
     display: flex;
   }
 }
+/* "Continue anyway": landscape for the rest of the session */
+.rot.is-dismissed {
+  display: none;
+}
+/* the card is a suggestion, not a lock: the skip link and the copy layer's
+   focus pills (in #track) show above it for keyboard users */
+html.is-rotate .skip-link,
+html.is-rotate #track:focus-within {
+  z-index: 210;
+}
 .rot-sky {
   position: absolute;
   inset: 0;
@@ -1901,6 +1931,51 @@
   font-weight: 500;
   color: rgba(29, 35, 33, 0.78);
 }
+.rot-actions {
+  margin: 14px 0 0;
+}
+.rot-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px 0 18px;
+  border: 0;
+  border-radius: 999px;
+  font: 700 14px var(--font-sans);
+  color: var(--ink);
+  background: #eef5f6;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(29, 35, 33, 0.24),
+    0 3px 0 rgba(29, 35, 33, 0.16);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1),
+    box-shadow 0.18s ease;
+}
+.rot-go:hover,
+.rot-go:focus-visible {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(29, 35, 33, 0.24),
+    0 5px 0 rgba(29, 35, 33, 0.16);
+}
+.rot-go:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(29, 35, 33, 0.24),
+    0 1px 0 rgba(29, 35, 33, 0.16);
+}
+.rot-go-arrow {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .rot-phone-ic {
   flex: none;
   width: 30px;
@@ -1940,15 +2015,32 @@ html.no-webgl #stages,
 html.no-webgl #gl {
   display: none;
 }
+/* the guidebook's dotted paper: one pattern on <body>, kept to the 1200px
+   column, so the banner, <main> and footer share it without a seam */
+html.no-webgl body {
+  background-image:
+    linear-gradient(
+      90deg,
+      #f6f1e7 calc(50% - 600px),
+      rgba(246, 241, 231, 0) calc(50% - 600px),
+      rgba(246, 241, 231, 0) calc(50% + 600px),
+      #f6f1e7 calc(50% + 600px)
+    ),
+    radial-gradient(rgba(29, 35, 33, 0.07) 1px, transparent 1.2px);
+  background-size:
+    auto,
+    22px 22px;
+}
 .fb {
   position: relative;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 var(--gutter) calc(48px + env(safe-area-inset-bottom, 0px));
+  padding: 0 var(--gutter);
   color: var(--ink);
   overflow-wrap: break-word;
-  background-image: radial-gradient(rgba(29, 35, 33, 0.07) 1px, transparent 1.2px);
-  background-size: 22px 22px;
+}
+.fb-end {
+  padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
 }
 .fb a {
   color: var(--ink);

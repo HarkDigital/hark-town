@@ -20,10 +20,10 @@ import { CELL, cellUv, type SiteTextures } from './textures'
 
 /*
  * Everything on the Building Site island. Static dressing is merged into a
- * handful of vertex-coloured meshes drawn with the kit's clayVC() material
+ * handful of vertex-colored meshes drawn with the kit's clayVC() material
  * (same rim-lit clay as every other island); everything that moves is an
  * InstancedMesh (floors, scaffold, people, trees, pegs, puffs) or a small
- * group (crane, vehicles, table, tripod, sign, hoarding flaps).
+ * group (crane, vehicles, table, tripod, sign, fence flaps).
  *
  * update(l, time) derives the whole scene from local progress `l`; real time
  * only drives idle life (walkers, sway, drum, clouds) and the length of pop
@@ -59,8 +59,8 @@ const ORANGE = '#ff8a3d'
 const HAT_Y = '#f6b928'
 const SKIN = ['#f3cfae', '#e0a982', '#b77a52', '#8a5a3b', '#f7dcc4']
 
-const hoardZ = (x: number) => 3.05 - 0.028 * x * x
-const hoardYaw = (x: number) => Math.atan(0.056 * x)
+const fenceZ = (x: number) => 3.05 - 0.028 * x * x
+const fenceYaw = (x: number) => Math.atan(0.056 * x)
 
 /** set an instance from position, euler and scale (hidden when scale ~0) */
 function setInst(mesh: THREE.InstancedMesh, i: number, x: number, y: number, z: number, ry: number, sx: number, sy: number, sz: number, rx = 0, rz = 0) {
@@ -210,8 +210,8 @@ const TREES_RIM: TreeSpot[] = [
 ]
 const TREE_KEYS = ['round', 'pine', 'poplar', 'blossom'] as const
 
-/** hoarding run along the front edge: painted plywood + three revolving stat panels */
-const HOARD: { w: number; h: number; cell: number; flap: number }[] = [
+/** site fence along the front edge: painted plywood + three revolving stat panels */
+const FENCE: { w: number; h: number; cell: number; flap: number }[] = [
   { w: 0.9, h: 0.45, cell: CELL.endL, flap: -1 },
   { w: 1.5, h: 0.75, cell: -1, flap: 0 },
   { w: 1.1, h: 0.55, cell: CELL.hats, flap: -1 },
@@ -220,15 +220,15 @@ const HOARD: { w: number; h: number; cell: number; flap: number }[] = [
   { w: 1.5, h: 0.75, cell: -1, flap: 2 },
   { w: 0.9, h: 0.45, cell: CELL.endR, flap: -1 },
 ]
-const HOARD_GAP = 0.14
-const HOARD_Y = 0.08
-const hoardX: number[] = []
+const FENCE_GAP = 0.14
+const FENCE_Y = 0.08
+const fenceX: number[] = []
 {
-  const total = HOARD.reduce((a, p) => a + p.w, 0) + HOARD_GAP * (HOARD.length - 1)
+  const total = FENCE.reduce((a, p) => a + p.w, 0) + FENCE_GAP * (FENCE.length - 1)
   let x = -total / 2
-  for (const p of HOARD) {
-    hoardX.push(x + p.w / 2)
-    x += p.w + HOARD_GAP
+  for (const p of FENCE) {
+    fenceX.push(x + p.w / 2)
+    x += p.w + FENCE_GAP
   }
 }
 
@@ -278,9 +278,12 @@ export class Site {
   private trees = new Map<string, THREE.InstancedMesh>()
   private treeSlots: number[] = []
   private puffs!: THREE.InstancedMesh
-  private hoardFaces!: THREE.Mesh
+  private fenceFaces!: THREE.Mesh
   private flaps: THREE.Group[] = []
   private cloudRing!: THREE.Group
+  /** the cloud bank the camera descends out of and climbs back into */
+  private bank!: THREE.Object3D
+  private bankDir = new THREE.Vector3(0.14, 0.92, 0.37).normalize()
 
   /** touchdowns: ground floor, three craned floors, the van */
   private events: { at: number; t0: number; x: number; y: number; z: number; hw: number; hd: number }[] = []
@@ -323,12 +326,12 @@ export class Site {
     markFaceGeometry(mobile)
     await yieldFrame()
 
-    // ---- static props + hoarding; construction clutter in its own group
+    // ---- static props + fence; construction clutter in its own group
     const props = new Batch()
     const clutter = new Batch()
     this.buildProps(props, clutter, mobile)
     await yieldFrame()
-    this.buildHoarding(props)
+    this.buildFence(props)
     this.site.add(props.build(vc))
     this.clutter = new THREE.Group()
     this.clutter.add(clutter.build(vc))
@@ -336,10 +339,10 @@ export class Site {
     alloc('clutter', 1)
     await yieldFrame()
 
-    // Hark-green LEDs on the hoarding posts and the floodlight
+    // Hark-green LEDs on the fence posts and the floodlight
     const leds = new Batch()
     const ledGeo = new THREE.SphereGeometry(0.036, 8, 6)
-    for (const [x, top] of this.postTops()) leds.put(ledGeo, C.signal, x, top + 0.03, hoardZ(x))
+    for (const [x, top] of this.postTops()) leds.put(ledGeo, C.signal, x, top + 0.03, fenceZ(x))
     this.site.add(leds.build(MAT.led, false, false))
     const flood = new Batch()
     flood.put(new THREE.SphereGeometry(0.06, 10, 8), C.signal, -4.28, 1.62, -1.15)
@@ -512,7 +515,7 @@ export class Site {
     this.site.add(this.table)
     alloc('table', 1)
 
-    // sound arcs travelling from the client into the cone: ")))"
+    // sound arcs traveling from the client into the cone: ")))"
     const arc = new THREE.TorusGeometry(1, 0.11, 6, 18, (Math.PI * 2) / 3)
     arc.rotateZ(-Math.PI / 3)
     const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(C.signal).multiplyScalar(1.6) })
@@ -646,7 +649,7 @@ export class Site {
       { at: T.VAN_IN[1] - 0.01, t0: -1e9, x: VAN.x, y: 0.02, z: VAN.z, hw: 0.45, hd: 0.25 },
     ]
 
-    // ---- hoarding flaps (revolve to show the stats)
+    // ---- fence flaps (revolve to show the stats)
     this.buildFlaps(vc)
     alloc('flaps', 3)
 
@@ -670,7 +673,7 @@ export class Site {
     this.root.add(this.cloudRing)
     // a bank of cloud the camera descends out of / climbs into
     const bank = new Batch()
-    const dir = new THREE.Vector3(0.14, 0.92, 0.37).normalize()
+    const dir = this.bankDir
     const br = rng(17)
     for (let i = 0; i < (mobile ? 6 : 9); i++) {
       const dist = 13 + i * 2.8
@@ -678,7 +681,8 @@ export class Site {
       _m.compose(_p, _q.setFromAxisAngle(Y0, br() * 6), _s.setScalar(2.8 + br() * 1.8))
       bank.add(cloudGeometry(20 + i), null, _m)
     }
-    this.root.add(bank.build(cloudMaterial(), false, false))
+    this.bank = bank.build(cloudMaterial(), false, false)
+    this.root.add(this.bank)
 
     this.pops = new Pops(n)
     this.flips = new Pops(3, 1.1, 0.8)
@@ -686,15 +690,15 @@ export class Site {
 
   // ------------------------------------------------------------------ builders
 
-  /** x and top height of every hoarding post */
+  /** x and top height of every fence post */
   private postTops(): [number, number][] {
     const out: [number, number][] = []
-    for (let i = 0; i <= HOARD.length; i++) {
-      const left = HOARD[i - 1]
-      const right = HOARD[i]
-      const x = right ? hoardX[i] - right.w / 2 - HOARD_GAP / 2 : hoardX[i - 1] + left.w / 2 + HOARD_GAP / 2
+    for (let i = 0; i <= FENCE.length; i++) {
+      const left = FENCE[i - 1]
+      const right = FENCE[i]
+      const x = right ? fenceX[i] - right.w / 2 - FENCE_GAP / 2 : fenceX[i - 1] + left.w / 2 + FENCE_GAP / 2
       const h = Math.max(left?.h ?? 0, right?.h ?? 0)
-      out.push([x, HOARD_Y + h + 0.06])
+      out.push([x, FENCE_Y + h + 0.06])
     }
     return out
   }
@@ -814,38 +818,38 @@ export class Site {
     }
   }
 
-  private buildHoarding(b: Batch) {
+  private buildFence(b: Batch) {
     // plywood backs + posts; the painted faces are one textured batch
     const faces = new Batch({ uv: true, color: false })
-    HOARD.forEach((p, i) => {
+    FENCE.forEach((p, i) => {
       if (p.flap >= 0) return
-      const x = hoardX[i]
-      const z = hoardZ(x)
-      const yaw = hoardYaw(x)
-      const cy = HOARD_Y + p.h / 2
+      const x = fenceX[i]
+      const z = fenceZ(x)
+      const yaw = fenceYaw(x)
+      const cy = FENCE_Y + p.h / 2
       b.box(p.w, p.h, 0.04, PLY_BACK, x, cy, z, yaw)
       _m.compose(_p.set(x + Math.sin(yaw) * 0.021, cy, z + Math.cos(yaw) * 0.021), _q.setFromAxisAngle(Y0, yaw), _s.set(1, 1, 1))
       faces.add(panelFace(p.w, p.h, p.cell), null, _m)
     })
     for (const [x, top] of this.postTops()) {
-      const z = hoardZ(x)
-      b.box(0.07, top, 0.07, '#3a4240', x, top / 2, z, hoardYaw(x))
-      b.box(0.05, 0.03, 0.22, '#3a4240', x, 0.015, z - 0.09, hoardYaw(x))
+      const z = fenceZ(x)
+      b.box(0.07, top, 0.07, '#3a4240', x, top / 2, z, fenceYaw(x))
+      b.box(0.05, 0.03, 0.22, '#3a4240', x, 0.015, z - 0.09, fenceYaw(x))
     }
-    const atlas = new THREE.MeshStandardMaterial({ map: this.tex.hoarding, roughness: 0.85 })
-    this.hoardFaces = faces.build(atlas, false, true)
-    this.site.add(this.hoardFaces)
+    const atlas = new THREE.MeshStandardMaterial({ map: this.tex.fence, roughness: 0.85 })
+    this.fenceFaces = faces.build(atlas, false, true)
+    this.site.add(this.fenceFaces)
   }
 
   private buildFlaps(vc: THREE.Material) {
-    const atlas = this.hoardFaces.material as THREE.Material
-    HOARD.forEach((p, i) => {
+    const atlas = this.fenceFaces.material as THREE.Material
+    FENCE.forEach((p, i) => {
       if (p.flap < 0) return
       const k = p.flap
-      const x = hoardX[i]
+      const x = fenceX[i]
       const g = new THREE.Group()
-      g.position.set(x, HOARD_Y + p.h / 2, hoardZ(x))
-      g.rotation.y = hoardYaw(x)
+      g.position.set(x, FENCE_Y + p.h / 2, fenceZ(x))
+      g.rotation.y = fenceYaw(x)
       const fb = new Batch({ uv: true, color: false })
       _m.makeTranslation(0, 0, 0.021)
       fb.add(panelFace(p.w, p.h, CELL.front[k]), null, _m)
@@ -869,8 +873,8 @@ export class Site {
     mx.box(0.32, 0.34, 0.38, C.roofRed, -0.42, 0.37, 0)
     mx.box(0.02, 0.14, 0.3, '#2c3e50', -0.585, 0.45, 0)
     mx.box(0.24, 0.12, 0.395, '#2c3e50', -0.42, 0.46, 0)
-    const tyre = new THREE.CylinderGeometry(0.085, 0.085, 0.07, 12)
-    for (const x of [-0.4, 0.18, 0.4]) for (const z of [-0.18, 0.18]) mx.put(tyre, INK, x, 0.085, z, 0, 1, 1, 1, Math.PI / 2)
+    const tire = new THREE.CylinderGeometry(0.085, 0.085, 0.07, 12)
+    for (const x of [-0.4, 0.18, 0.4]) for (const z of [-0.18, 0.18]) mx.put(tire, INK, x, 0.085, z, 0, 1, 1, 1, Math.PI / 2)
     mx.box(0.1, 0.05, 0.12, '#a9adb1', 0.56, 0.3, 0, 0, 0, -0.5)
     this.mixer.add(mx.build(vc))
     const prof: THREE.Vector2[] = []
@@ -886,7 +890,7 @@ export class Site {
     const red = new THREE.Color(C.roofRed)
     const wht = new THREE.Color('#f4efe6')
     for (let i = 0; i < dp.count; i += 3) {
-      // colour per face so the spiral stripes stay crisp
+      // color per face so the spiral stripes stay crisp
       const x = (dp.getX(i) + dp.getX(i + 1) + dp.getX(i + 2)) / 3
       const y = (dp.getY(i) + dp.getY(i + 1) + dp.getY(i + 2)) / 3
       const z = (dp.getZ(i) + dp.getZ(i + 1) + dp.getZ(i + 2)) / 3
@@ -1263,7 +1267,7 @@ export class Site {
     const ip = pops.isOn(id.idea) ? pops.p[id.idea] : -1
     this.setBubble(this.idea, ip, CLIENT_AT_DOOR.x + 0.02, 0.58, CLIENT_AT_DOOR.z, calm)
 
-    // ---- stats: hoarding panels revolve
+    // ---- stats: fence panels revolve
     for (let k = 0; k < 3; k++) {
       this.flips.item(k, l >= T.STATS_AT[k], time, calm)
       const isOn = this.flips.isOn(k)
@@ -1275,6 +1279,11 @@ export class Site {
     }
 
     this.updatePuffs(time, calm)
+
+    // the bank only matters on the way in and out: it drifts up out of the sky
+    // while the site is on show (tall screens would otherwise see it over the site)
+    const clear = smoothstep(0.07, 0.16, l) * (1 - smoothstep(0.9, 0.97, l))
+    this.bank.position.copy(this.bankDir).multiplyScalar(clear * 18)
 
     this.cloudRing.rotation.y = t * 0.01
     this.cloudRing.position.y = calm ? 0 : Math.sin(t * 0.15) * 0.2

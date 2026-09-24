@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { rng } from '../core/math'
-import { C, clay, clayVC } from './palette'
-import { Builder, col, twoTone, vnoise2 } from './geo'
+import { C, clay, clayVC, markTwin, registerTwins, type InstanceOptions } from './palette'
+import { Builder, col, twoTone, vnoise2, type Paint } from './geo'
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 
 /** Weld a non-indexed polyhedron so computeVertexNormals gives smooth normals. */
@@ -186,44 +186,89 @@ export function tuftGeometry(): THREE.BufferGeometry {
 // ------------------------------------------------------------------ clouds
 
 const cloudCache = new Map<number, THREE.BufferGeometry>()
-/** Puffy stylised cloud geometry: flat-ish bottom, white top, soft lilac-grey underside. ~3 units long at scale 1. */
+
+/** Underside squash: g(y) = y above 0, easing into y * CLOUD_FLAT below with a continuous slope (no crease). */
+const CLOUD_FLAT = 0.25
+const CLOUD_K = 0.18
+function cloudSquash(y: number) {
+  return y >= 0 ? y : y * (CLOUD_FLAT + (1 - CLOUD_FLAT) * Math.exp(y / CLOUD_K))
+}
+function cloudSquashSlope(y: number) {
+  if (y >= 0) return 1
+  const e = Math.exp(y / CLOUD_K)
+  return CLOUD_FLAT + (1 - CLOUD_FLAT) * e * (1 + y / CLOUD_K)
+}
+
+/**
+ * Puffy stylised cloud geometry: flat-ish bottom, white top, soft lilac-grey
+ * underside. ~3 units long at scale 1.
+ *
+ * Normals are smooth across the whole cloud, not per puff: each vertex takes
+ * the gradient of a soft union of all the puffs (so the seams where puffs
+ * meet shade as soft valleys, not creases), then the underside squash's
+ * Jacobian (so the flattened bottom shades flat and the rim rolls over it
+ * smoothly).
+ */
 export function cloudGeometry(seed = 1): THREE.BufferGeometry {
   const v = Math.abs(seed) % 5
   let g = cloudCache.get(v)
   if (g) return g
   const rand = rng(v * 31 + 7)
-  const b = new Builder()
+  const puffs: { x: number; y: number; z: number; r: number }[] = []
   const count = 5 + Math.floor(rand() * 3)
-  const parts: THREE.BufferGeometry[] = []
   for (let i = 0; i < count; i++) {
     const t = i / (count - 1) - 0.5
     const r = (0.55 + (1 - Math.abs(t) * 1.6) * 0.45) * (0.85 + rand() * 0.3)
-    const s = new THREE.IcosahedronGeometry(r, 2)
-    s.translate(t * 2.6 + (rand() - 0.5) * 0.2, r * 0.35 + rand() * 0.1, (rand() - 0.5) * 0.7)
-    parts.push(s)
+    const x = t * 2.6 + (rand() - 0.5) * 0.2
+    const y = r * 0.35 + rand() * 0.1
+    const z = (rand() - 0.5) * 0.7
+    puffs.push({ x, y, z, r })
   }
   // a couple of puffs behind for volume
   for (let i = 0; i < 2; i++) {
     const r = 0.5 + rand() * 0.2
-    const s = new THREE.IcosahedronGeometry(r, 1)
-    s.translate((rand() - 0.5) * 1.4, r * 0.3, -0.45 - rand() * 0.2)
-    parts.push(s)
+    const x = (rand() - 0.5) * 1.4
+    const z = -0.45 - rand() * 0.2
+    puffs.push({ x, y: r * 0.3, z, r })
   }
   const top = col('#ffffff'), bot = col('#dfe2f0')
-  for (const p of parts) {
-    // flatten the undersides; keep smooth sphere normals (bend them down where flattened)
-    const pos = p.attributes.position, nor = p.attributes.normal
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i)
-      if (y < 0) {
-        pos.setY(i, y * 0.25)
-        const nx = nor.getX(i) * 0.45, ny = nor.getY(i) * 0.45 - 0.55, nz = nor.getZ(i) * 0.45
-        const l = Math.hypot(nx, ny, nz)
-        nor.setXYZ(i, nx / l, ny / l, nz / l)
+  const paint: Paint = (_x, y, _z, out, _nx, ny) => out.copy(bot).lerp(top, Math.min(1, Math.max(0, y * 0.9 + 0.25 + ny * 0.3)))
+  const unit = new THREE.IcosahedronGeometry(1, 2)
+  const U = unit.attributes.position.array as Float32Array
+  const n = unit.attributes.position.count
+  const b = new Builder()
+  for (const p of puffs) {
+    const P = new Float32Array(n * 3)
+    const N = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) {
+      const x = p.x + U[i * 3] * p.r, y = p.y + U[i * 3 + 1] * p.r, z = p.z + U[i * 3 + 2] * p.r
+      // soft-union gradient: every puff pulls the normal toward its own, weighted by how close it is
+      let gx = 0, gy = 0, gz = 0
+      for (const q of puffs) {
+        const dx = x - q.x, dy = y - q.y, dz = z - q.z
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-6
+        const w = Math.exp(-7 * Math.max(-0.25, (d - q.r) / q.r))
+        gx += (dx / d) * w
+        gy += (dy / d) * w
+        gz += (dz / d) * w
       }
+      // squash the underside; normals follow the inverse-transpose Jacobian diag(1, g'(y), 1)
+      const ys = cloudSquash(y)
+      gy /= cloudSquashSlope(y)
+      const l = Math.sqrt(gx * gx + gy * gy + gz * gz) || 1
+      P[i * 3] = x
+      P[i * 3 + 1] = ys
+      P[i * 3 + 2] = z
+      N[i * 3] = gx / l
+      N[i * 3 + 1] = gy / l
+      N[i * 3 + 2] = gz / l
     }
-    b.add(p, (_x, y, _z, out, _nx, ny) => out.copy(bot).lerp(top, Math.min(1, Math.max(0, y * 0.9 + 0.25 + ny * 0.3))))
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(P, 3))
+    geo.setAttribute('normal', new THREE.BufferAttribute(N, 3))
+    b.add(geo, paint)
   }
+  unit.dispose()
   g = b.build()
   cloudCache.set(v, g)
   return g
@@ -238,25 +283,31 @@ export function makeCloud(seed = 1, scale = 1): THREE.Mesh {
   return m
 }
 
-let cloudMat: THREE.MeshStandardMaterial | null = null
+const cloudMats = new Map<string, THREE.MeshStandardMaterial>()
 /**
  * Bright, soft cloud material (vertex colours + a sky-tinted luminous lift
  * driven by the World, so clouds stay creamy at golden hour and grey in
- * storms instead of going muddy). Shared: don't mutate.
+ * storms instead of going muddy). Shared: don't mutate. InstancedMeshes take
+ * `cloudMaterial({ instanced: true })`.
  */
-export function cloudMaterial() {
-  if (cloudMat) return cloudMat
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 1, metalness: 0 })
+export function cloudMaterial(o: InstanceOptions = {}): THREE.MeshStandardMaterial {
+  const key = o.instanced ? (o.instanceColor ? 'ic' : 'i') : ''
+  let m = cloudMats.get(key)
+  if (m) return m
+  m = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 1, metalness: 0 })
   const base = clayVC().onBeforeCompile
+  const mm = m
   m.onBeforeCompile = (shader, r) => {
-    base.call(m, shader, r)
+    base.call(mm, shader, r)
     shader.uniforms.uCloudLift = KIT.uCloudLift
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform vec3 uCloudLift;')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uCloudLift * diffuseColor.rgb;')
   }
   m.customProgramCacheKey = () => 'kit-cloud'
-  cloudMat = m
+  cloudMats.set(key, m)
+  if (o.instanced) markTwin(m)
+  else registerTwins(m, colored => cloudMaterial({ instanced: true, instanceColor: colored }))
   return m
 }
 
@@ -435,6 +486,9 @@ function waterfallMaterial() {
       )
   }
   m.customProgramCacheKey = () => 'kit-fall'
+  // a thin sheet: no need for three's back-then-front double pass (which also
+  // bumps material.version twice per draw and re-selects the program)
+  m.forceSinglePass = true
   fallMat = m
   return m
 }

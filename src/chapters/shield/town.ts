@@ -26,7 +26,8 @@ import type { Crowd, HouseOptions } from '../../kit/props'
 import { logoGeometry } from '../../logo/logo'
 import { ease, rng, segment } from '../../core/math'
 import { T } from './timeline'
-import { hash1, nextFrame } from './util'
+import { nextFrame } from '../../core/yield'
+import { hash1 } from './util'
 
 /*
  * The storm island: a cosy ring of kit cottages around a stone plaza and a

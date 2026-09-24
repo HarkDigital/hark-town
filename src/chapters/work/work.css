@@ -329,7 +329,7 @@
 /* ---------------- portrait / phones: island above, signage below ---------------- */
 @media (max-width: 699px), (max-aspect-ratio: 4/5) {
   .stage-work {
-    --wk-rw: 200px;
+    --wk-rw: min(200px, calc(100vw - 2 * var(--gutter) - 150px));
   }
   .stage-work .wk-dock {
     left: var(--gutter);
@@ -344,13 +344,15 @@
     width: 100%;
     max-width: 560px;
   }
-  /* compact head: place + status on one row, the route strip below */
+  /* compact head: place + route strip on one row, the next stop on its own
+     line below (the full name always fits) */
   .stage-work .wk-head {
     display: grid;
-    grid-template-columns: auto minmax(0, auto);
-    grid-template-areas: 'row note' 'route route';
+    grid-template-columns: auto auto;
+    grid-template-areas: 'row route' 'note note';
     align-items: center;
     column-gap: 14px;
+    max-width: calc(100vw - 2 * var(--gutter) + 24px);
     padding: 10px 14px 9px 12px;
   }
   .stage-work .wk-head-row {
@@ -361,13 +363,13 @@
   }
   .stage-work .wk-route {
     grid-area: route;
-    margin-top: 10px;
+    margin-top: 0;
   }
   .stage-work .wk-head-note {
     grid-area: note;
-    margin: 0;
-    max-width: 44vw;
-    text-align: right;
+    margin: 7px 0 0;
+    max-width: none;
+    min-height: 0;
   }
   .stage-work .wk-plate,
   .stage-work .wk-market {
@@ -423,6 +425,63 @@
   .stage-work .wk-list a {
     padding: 3px 8px;
     font-size: 12px;
+  }
+}
+/* ---------------- short landscape windows ----------------
+   The plates dock between the head and the Sound button; on short windows
+   they drop the tags and tighten up so they always fit that band (and the
+   market's "Say hello" stays clear of Sound). */
+@media (min-width: 700px) and (min-aspect-ratio: 4/5) and (max-height: 640px) {
+  .stage-work .wk-dock {
+    width: min(410px, max(34vw, 330px));
+  }
+  .stage-work .wk-plate,
+  .stage-work .wk-market {
+    padding: 16px 18px 17px;
+  }
+  .stage-work .wk-name,
+  .stage-work .wk-market-title {
+    font-size: clamp(1.8rem, 2.7vw, 2.4rem);
+    margin: 10px 0 8px;
+  }
+  .stage-work .wk-market .wk-plate-top {
+    display: none;
+  }
+  .stage-work .wk-market-title {
+    margin-top: 0;
+  }
+  .stage-work .wk-blurb {
+    font-size: 14.5px;
+    line-height: 1.45;
+  }
+  .stage-work .wk-tags {
+    margin-top: 10px;
+  }
+  .stage-work .wk-cta {
+    margin-top: 14px;
+  }
+  .stage-work .wk-list a {
+    padding: 3px 8px;
+    font-size: 12.5px;
+  }
+  .stage-work .hud-btn {
+    padding: 11px 18px;
+    font-size: 14px;
+  }
+}
+@media (min-width: 700px) and (min-aspect-ratio: 4/5) and (max-height: 580px) {
+  .stage-work .wk-tags,
+  .stage-work .wk-pill {
+    display: none;
+  }
+  .stage-work .wk-blurb {
+    font-size: 13.5px;
+  }
+  .stage-work .wk-list a {
+    font-size: 12px;
+  }
+  .stage-work .wk-cta {
+    margin-top: 12px;
   }
 }
 @media (max-width: 380px) {

@@ -42,6 +42,9 @@
 }
 
 .stage-shield .shd-title {
+  /* a stacking context for the storm scrim (::before) behind the words */
+  position: relative;
+  isolation: isolate;
   font-size: clamp(3rem, 6.6vw, 6.8rem);
   line-height: 0.9;
   margin: 2px 0 4px;
@@ -55,8 +58,44 @@
 .stage-shield .shd-line {
   display: block;
 }
-.stage-shield.is-dark .shd-title {
-  text-shadow: 0 2px 22px rgba(20, 24, 30, 0.35);
+
+/* storm scrim: while the sky is dark the white headline sits on a soft cloud
+   of storm shadow (a blurred plate around the words), so it holds its
+   contrast over the grey sky, the rain and the bright haze under the island.
+   It follows the headline in, and fades away as the sky lights up. The dark
+   halo from base.css stacks on top of it. */
+.stage-shield .shd-title::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -0.2em;
+  right: -0.3em;
+  bottom: -0.24em;
+  left: -0.3em;
+  border-radius: 0.5em;
+  background: rgba(14, 18, 26, 0.52);
+  filter: blur(0.24em);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.7s ease,
+    bottom 0.45s ease,
+    right 0.45s ease;
+}
+.stage-shield .shd.is-scrim .shd-title::before {
+  opacity: 1;
+}
+/* after the lights come up the sky is still clearing: a tighter, fuller sky
+   halo keeps the ink and the green em readable over the last of the grey */
+.stage-shield:not(.is-dark) .shd-title {
+  text-shadow:
+    0 0 18px rgba(233, 242, 244, 0.9),
+    0 0 6px rgba(233, 242, 244, 0.85),
+    0 0 2px rgba(233, 242, 244, 0.85);
+}
+/* only 'Hacked?' is up: the scrim covers the first line */
+.stage-shield .shd-title.is-one::before {
+  bottom: calc(50% - 0.2em);
 }
 
 /* the body card and the 24/7 card swap in the same slot */
@@ -239,6 +278,11 @@
   }
   .stage-shield .shd-line + .shd-line {
     margin-left: 0.24em;
+  }
+  /* one line here, so 'Hacked?' alone is the left half of it */
+  .stage-shield .shd-title.is-one::before {
+    bottom: -0.24em;
+    right: calc(50% - 0.3em);
   }
   .stage-shield .shd-card {
     padding: 13px 15px;

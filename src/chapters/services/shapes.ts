@@ -2,7 +2,7 @@ import * as THREE from 'three'
 
 /* Small geometry helpers for the workshop dioramas (all raw, unpainted). */
 
-/** Right-triangle prism: base w along x at y = 0, vertical side (height h) at +x, length d along z (centred). */
+/** Right-triangle prism: base w along x at y = 0, vertical side (height h) at +x, length d along z (centered). */
 export function wedgeGeo(w: number, h: number, d: number, rightHigh = true) {
   const s = new THREE.Shape()
   if (rightHigh) {
@@ -83,7 +83,7 @@ export function flagDownGeo(w: number, h: number, thick = 0.01) {
   return g
 }
 
-/** Stadium (race track) centre-line sampler: straights along x (half length ls), turn radius rt, offset o outward. */
+/** Stadium (race track) center-line sampler: straights along x (half length ls), turn radius rt, offset o outward. */
 export function stadium(ls: number, rt: number, s: number, o: number, out: { x: number; z: number; yaw: number }) {
   const straight = 2 * ls
   const turn = Math.PI * rt
@@ -101,7 +101,7 @@ export function stadium(ls: number, rt: number, s: number, o: number, out: { x: 
     const th = Math.PI / 2 - d / rt
     out.x = ls + r * Math.cos(th)
     out.z = r * Math.sin(th)
-    // travelling clockwise seen from above: tangent = (sin th, -cos th)... d(th) < 0
+    // traveling clockwise seen from above: tangent = (sin th, -cos th)... d(th) < 0
     const tx = Math.sin(th), tz = -Math.cos(th)
     out.yaw = Math.atan2(-tz, tx)
     return out

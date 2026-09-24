@@ -3,13 +3,15 @@
  *
  *   0.00–0.07  in-beat: the camera drops out of the cloud wipe; the storm is
  *              already rolling in and the townsfolk run for their doors
+ *              (the cut's wipe is gone by ≈0.106 = 0.18 vh / 1.7 vh, so the
+ *              eyebrow and the white headline only arrive after it)
  *   0.07–0.35  HACK STORM: red 'hack' lightning crackles into the town, cracks
  *              glow where it lands, windows flicker red, 'Intrusion detected'
  *   0.28–0.36  the Hark beacon charges (LEDs ramp, the emblem spins up)
  *   0.35–0.43  a green hex SHIELD DOME blows up out of the beacon like a bubble
  *   0.40–0.52  the cracks heal green and vanish; windows go warm and cosy
  *   0.44–0.68  bolts splash harmlessly off the dome with hex ripples
- *   0.67–0.79  the storm clears; the dome sinks back into the beacon, which
+ *   0.68–0.78  the storm clears; the dome sinks back into the beacon, which
  *              keeps pinging a soft green 24/7 watch ring across the town
  *   0.72–0.85  a toy rainbow sweeps over the island, puddles glint
  *   0.74–0.86  people pop back out of their doors and stroll the plaza
@@ -27,7 +29,10 @@ export const T = {
     [0.18, 0.29],
     [0.235, 0.35],
   ],
-  hackTitle: 0.1,
+  /** the eyebrow pill fades up as the wipe breaks */
+  eyebrow: 0.095,
+  /** white 'Hacked?' (with its storm scrim) once the wipe has fully cleared */
+  hackTitle: 0.125,
   alert: [0.085, 0.345],
   charge: [0.28, 0.36],
   inflate: [0.35, 0.43],
@@ -43,12 +48,16 @@ export const T = {
   rainOut: [0.66, 0.73],
   /** the dome sinks back into the beacon; watch pings take over */
   deflate: [0.7, 0.775],
-  clear: [0.67, 0.79],
+  clear: [0.68, 0.78],
   rainbow: [0.72, 0.85],
   peopleOut: 0.74,
-  /** the sky is bright enough for ink text again */
-  lightsUp: 0.712,
-  watch: 0.735,
+  /**
+   * the sky is bright enough for ink text again (just past halfway through the clear);
+   * until then the headline stays white on its storm scrim
+   */
+  lightsUp: 0.737,
+  /** the 24/7 card arrives on a light plate, just after the lights come up */
+  watch: 0.742,
   out: [0.93, 1],
   /** where the CTA is settled (chapter.anchors) */
   cta: 0.83,

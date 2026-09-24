@@ -90,7 +90,7 @@ export function makeCrowd(count: number, o: { seed?: number; variants?: number }
   const meshes: THREE.InstancedMesh[] = []
   const per = Math.ceil(count / V)
   for (let v = 0; v < V; v++) {
-    const im = new THREE.InstancedMesh(personGeometry(seed * 10 + v), clayVC(), per)
+    const im = new THREE.InstancedMesh(personGeometry(seed * 10 + v), clayVC({ instanced: true }), per)
     im.castShadow = false
     im.receiveShadow = true
     im.frustumCulled = false

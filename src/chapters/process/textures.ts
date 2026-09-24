@@ -5,7 +5,7 @@ import { rng } from '../../core/math'
 
 /*
  * Painted surfaces for the site, drawn once into canvases:
- *  - the hoarding atlas: seven plywood panels (three of them revolve to show
+ *  - the fence atlas: seven plywood panels (three of them revolve to show
  *    the stats on their green backs),
  *  - the blueprint on the trestle table,
  *  - the cardboard mock-up's marker-drawn facade,
@@ -22,11 +22,11 @@ const SIGNAL = '#00e27a'
 const PLY = '#f3ead6'
 const MUSTARD = '#f0b43c'
 
-/** The three stats the hoarding carries, in hoarding order. */
-export const HOARD_STATS = ['10 years', '$1M+', '15'].map(v => STATS.find(s => s.value === v)!).filter(Boolean)
+/** The three stats the site fence carries, in fence order. */
+export const FENCE_STATS = ['10 years', '$1M+', '15'].map(v => STATS.find(s => s.value === v)!).filter(Boolean)
 /** a verbatim opening of each stat's label, short enough to paint on a panel */
 const CAPTION_WORDS = [3, 4, 5]
-export const statCaption = (i: number) => HOARD_STATS[i].label.split(/\s+/).slice(0, CAPTION_WORDS[i]).join(' ')
+export const statCaption = (i: number) => FENCE_STATS[i].label.split(/\s+/).slice(0, CAPTION_WORDS[i]).join(' ')
 
 function canvas(w: number, h: number) {
   const c = document.createElement('canvas')
@@ -64,7 +64,7 @@ function fitFont(g: CanvasRenderingContext2D, text: string, weight: string, fami
 }
 
 let markPaths: Path2D | null = null
-/** The Hark mark as a canvas path, 1 unit tall, centred, y down. */
+/** The Hark mark as a canvas path, 1 unit tall, centered, y down. */
 function markPath() {
   if (markPaths) return markPaths
   const p = new Path2D()
@@ -112,7 +112,7 @@ function chevrons(g: CanvasRenderingContext2D, x: number, y: number, w: number, 
   g.restore()
 }
 
-// ------------------------------------------------------------------ hoarding
+// ------------------------------------------------------------------ site fence
 
 export const ATLAS = { cols: 2, rows: 5, cw: 512, ch: 256 }
 /** cells: 0 end-L · 1 stat1 front · 2 hats · 3 stat2 front · 4 dust · 5 stat3 front · 6–8 stat backs · 9 end-R */
@@ -171,7 +171,7 @@ function drawCell(g: CanvasRenderingContext2D, cell: number) {
     g.fillRect(x, y, cw, ch)
     g.fillStyle = 'rgba(255,255,255,0.14)'
     g.fillRect(x, y, cw, ch * 0.06)
-    const s = HOARD_STATS[backIdx]
+    const s = FENCE_STATS[backIdx]
     g.fillStyle = INK
     fitFont(g, s.value, '640', DISPLAY, 132, cw - 70)
     g.fillText(s.value, x + 30, y + ch * 0.6)
@@ -243,7 +243,7 @@ function drawCell(g: CanvasRenderingContext2D, cell: number) {
   g.restore()
 }
 
-export function drawHoarding(c: HTMLCanvasElement) {
+export function drawFence(c: HTMLCanvasElement) {
   const g = c.getContext('2d')!
   g.clearRect(0, 0, c.width, c.height)
   for (let i = 0; i < ATLAS.cols * ATLAS.rows; i++) drawCell(g, i)
@@ -437,7 +437,7 @@ export function drawBubble(c: HTMLCanvasElement, kind: 'talk' | 'idea') {
 // ------------------------------------------------------------------ bundle
 
 export interface SiteTextures {
-  hoarding: THREE.CanvasTexture
+  fence: THREE.CanvasTexture
   blueprint: THREE.CanvasTexture
   cardboard: THREE.CanvasTexture
   talk: THREE.CanvasTexture
@@ -452,22 +452,22 @@ export function makeTextures(aniso: number, mobile: boolean): SiteTextures {
   const cc = canvas(mobile ? 256 : 512, mobile ? 80 : 160)
   const tc = canvas(128, 112)
   const ic = canvas(128, 112)
-  drawHoarding(hc)
+  drawFence(hc)
   drawBlueprint(bc)
   drawCardboard(cc)
   drawBubble(tc, 'talk')
   drawBubble(ic, 'idea')
   const out: SiteTextures = {
-    hoarding: texture(hc, aniso),
+    fence: texture(hc, aniso),
     blueprint: texture(bc, aniso),
     cardboard: texture(cc, aniso),
     talk: texture(tc, 1),
     idea: texture(ic, 1),
     redraw() {
-      drawHoarding(hc)
+      drawFence(hc)
       drawBlueprint(bc)
       drawCardboard(cc)
-      out.hoarding.needsUpdate = true
+      out.fence.needsUpdate = true
       out.blueprint.needsUpdate = true
       out.cardboard.needsUpdate = true
     },

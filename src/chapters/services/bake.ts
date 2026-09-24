@@ -6,7 +6,7 @@ import { clayVC } from '../../kit/palette'
 
 /*
  * One island = one draw call. Every piece of a workshop (the building, each
- * tree, the signpost…) is painted with the kit's vertex-colour Builder and
+ * tree, the signpost…) is painted with the kit's vertex-color Builder and
  * tagged with a pop pivot + delay (aPop). The island's material squashes and
  * stretches each piece up out of the ground around its own pivot as the
  * island's uBuild rises, so buildings POP and trees bounce in one after the
@@ -167,7 +167,7 @@ export class PopBuilder {
     this.push(this.b.build(), 0)
   }
 
-  /** Bake a kit object (vertex-coloured or plain clay meshes) as-is. */
+  /** Bake a kit object (vertex-colored or plain clay meshes) as-is. */
   object(o: THREE.Object3D, t?: Xf) {
     o.updateMatrixWorld(true)
     const m = this.mat(t)
@@ -276,7 +276,7 @@ export function jiggle(t: number) {
 
 // ------------------------------------------------------------------ small helpers for animated parts
 
-/** Build a vertex-coloured mesh with the kit Builder (clayVC). */
+/** Build a vertex-colored mesh with the kit Builder (clayVC). */
 export function vcMesh(fn: (b: Builder) => void, shadow = true): THREE.Mesh {
   const b = new Builder()
   fn(b)

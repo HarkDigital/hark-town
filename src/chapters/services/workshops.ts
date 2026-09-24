@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { C, MAT, clayVC } from '../../kit/palette'
-import { Builder, col, paint } from '../../kit/geo'
+import { Builder, col, paint, vgrad } from '../../kit/geo'
 import { rockGeometry, makePond } from '../../kit/nature'
 import { PopBuilder, cellUV, gearGeo, rboxGeo, vcMesh } from './bake'
 import { CELL } from './atlas'
@@ -311,7 +311,7 @@ function webDesign(b: PopBuilder, s: ShopKit) {
   canvas.rotation.x = -0.12
   easel.add(canvas)
   const blocks: [number, number, number, number, string][] = [
-    // x-left, y, w, h, colour (canvas coords, centre origin)
+    // x-left, y, w, h, color (canvas coords, center origin)
     [-0.25, 0.155, 0.5, 0.055, K.hark],
     [-0.25, 0.03, 0.27, 0.15, C.mustard],
     [0.05, 0.03, 0.2, 0.15, C.sky],
@@ -454,81 +454,186 @@ function ecommerce(b: PopBuilder, s: ShopKit) {
   s.actor({ shirt: C.navy, pose: pingPong(1.25, 0.2, 0.75, 0.52, 0.22, 2.4, 0.5) })
 }
 
-// ------------------------------------------------------------------ 04 SEO / GEO: the beacon
+// ------------------------------------------------------------------ 04 SEO / GEO: Signal Hill, the radio mast
 
-function seo(b: PopBuilder, s: ShopKit) {
-  const tx = -0.35, tz = -0.4, TH = 2.1
-  s.keep(tx, tz, 0.75)
-  s.keep(0.7, -0.75, 0.55)
-  s.keep(0.95, 0.5, 0.35)
-  b.piece(tx, tz, 0, () => {
-    for (let i = 0; i < 5; i++) {
-      const a = i * 1.3 + 0.4
-      b.painted(rockGeometry(i + 2), { x: tx + Math.cos(a) * 0.46, z: tz + Math.sin(a) * 0.46, s: 0.75 + (i % 2) * 0.3, ry: a })
-    }
-    b.cyl(0.28, 0.4, TH, 24, C.white, { x: tx, z: tz })
-    for (const [y, h] of [[0.5, 0.2], [1.3, 0.2]]) {
-      const r0 = 0.4 - (0.12 * y) / TH, r1 = 0.4 - (0.12 * (y + h)) / TH
-      b.cyl(r1 + 0.012, r0 + 0.012, h, 24, '#18c070', { x: tx, y, z: tz })
-    }
-    b.rbox(0.17, 0.3, 0.05, 0.02, C.woodDark, { x: tx, z: tz + 0.39 })
-    b.rbox(0.08, 0.12, 0.04, 0.01, K.glassDark, { x: tx, y: 0.95, z: tz + 0.35 })
-    b.rbox(0.08, 0.12, 0.04, 0.01, K.glassDark, { x: tx, y: 1.7, z: tz + 0.31 })
-    b.cyl(0.42, 0.4, 0.06, 24, C.ink, { x: tx, y: TH, z: tz })
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2
-      b.cyl(0.008, 0.008, 0.18, 4, C.ink, { x: tx + Math.cos(a) * 0.39, y: TH + 0.06, z: tz + Math.sin(a) * 0.39 })
-    }
-    b.add(new THREE.TorusGeometry(0.39, 0.012, 4, 32), C.ink, { x: tx, y: TH + 0.24, z: tz, rx: Math.PI / 2 })
-    b.cyl(0.21, 0.21, 0.34, 20, '#cfeaf3', { x: tx, y: TH + 0.05, z: tz })
-    b.cone(0.28, 0.26, 20, C.ink, { x: tx, y: TH + 0.39, z: tz })
-    b.sphere(0.045, C.mustard, { x: tx, y: TH + 0.68, z: tz }, 1)
-    b.ledBall(0.13, C.signalBright, { x: tx, y: TH + 0.22, z: tz })
+/** A thin box strut from a to b (its long axis is local y). */
+function strut(b: PopBuilder | Builder, a: THREE.Vector3Like, c: THREE.Vector3Like, t: number, color: string) {
+  const dx = c.x - a.x, dy = c.y - a.y, dz = c.z - a.z
+  const L = Math.hypot(dx, dy, dz)
+  if (L < 1e-5) return
+  b.box(t, L, t, color, {
+    x: (a.x + c.x) / 2,
+    y: (a.y + c.y) / 2,
+    z: (a.z + c.z) / 2,
+    rx: Math.acos(Math.max(-1, Math.min(1, dy / L))),
+    ry: Math.atan2(dx, dz),
   })
-  b.piece(0.7, -0.75, 0.14, () => {
-    b.rbox(0.78, 0.55, 0.6, 0.04, C.white, { x: 0.7, z: -0.75 })
-    b.gable(0.78, 0.36, 0.66, C.roofRed, { x: 0.7, y: 0.54, z: -0.75 })
-    door(b, 0.18, 0.34, 0.85, -0.44, C.navy)
-    windowPane(b, 0.16, 0.16, 0.52, 0.26, -0.445)
-  })
+}
 
-  // sweeping beam: two soft additive cones from the lamp
-  const beamMat = new THREE.ShaderMaterial({
+/**
+ * A parabolic dish opening along +y, vertex at the origin: a softly shaded
+ * white bowl, silver back, Hark-green rim and (optionally) one feed arm from
+ * the +x rim (the low edge once mounted) to a feed horn at the focus.
+ */
+function dishGeo(R: number, depth: number, feed = true) {
+  const d = new Builder()
+  const th = R * 0.08
+  const f = (R * R) / (4 * depth)
+  const N = 7
+  const inner: THREE.Vector2[] = []
+  const back: THREE.Vector2[] = []
+  for (let i = N; i >= 0; i--) {
+    const r = (R * i) / N
+    inner.push(new THREE.Vector2(r, (r * r) / (4 * f)))
+  }
+  for (let i = 0; i <= N; i++) {
+    const r = (R * i) / N
+    back.push(new THREE.Vector2(r, (r * r) / (4 * f) - th))
+  }
+  // the bowl grays a touch toward its center so it reads as concave face-on
+  const rimC = col(C.white), midC = col('#d9e1e6')
+  d.add(new THREE.LatheGeometry(inner, 24), (x, _y, z, out) => out.copy(midC).lerp(rimC, Math.min(1, Math.hypot(x, z) / R) ** 0.7))
+  d.add(new THREE.LatheGeometry(back, 24), K.silver)
+  d.add(new THREE.TorusGeometry(R, th * 0.75, 6, 28), K.hark, { y: depth - th / 2, rx: Math.PI / 2 })
+  d.cyl(R * 0.2, R * 0.2, R * 0.2, 12, C.slate, { y: -th - R * 0.08 })
+  if (feed) {
+    strut(d, { x: R * 0.94, y: depth, z: 0 }, { x: 0, y: f - 0.02, z: 0 }, R * 0.07, K.steel)
+    d.cyl(R * 0.13, R * 0.09, R * 0.22, 10, C.ink, { y: f })
+  } else d.sphere(R * 0.12, C.ink, { y: depth * 0.6 }, 1)
+  return d.build()
+}
+
+/** Broadcast rings: soft green pulses rolling out from the mast tip. */
+function signalRings(outer: number, gap: number) {
+  const geo = new THREE.CircleGeometry(outer, 72)
+  geo.rotateX(-Math.PI / 2)
+  const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
-    uniforms: { uColor: { value: new THREE.Color('#9dffc9') } },
+    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color('#5dffb0') } },
     vertexShader: /* glsl */ `
-      varying float vT;
+      varying vec2 vXZ;
       void main() {
-        vT = clamp(position.x / 3.4, 0.0, 1.0);
+        vXZ = position.xz;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: /* glsl */ `
+      uniform float uTime;
       uniform vec3 uColor;
-      varying float vT;
+      varying vec2 vXZ;
       void main() {
-        float a = (1.0 - vT) * (1.0 - vT) * 0.42;
-        gl_FragColor = vec4(uColor * a, 1.0);
+        float r = length(vXZ);
+        float k = r / ${outer.toFixed(3)};
+        // signed distance to the nearest ring; rings roll outward with uTime
+        float d = (fract(r / ${gap.toFixed(3)} - uTime + 0.5) - 0.5) * ${gap.toFixed(3)};
+        float w = 0.018 + 0.03 * k;
+        float ring = exp(-d * d / (w * w));
+        float a = ring * smoothstep(0.08, 0.3, r) * (1.0 - smoothstep(0.35, 1.0, k)) * 0.9;
+        if (a < 0.003) discard;
+        gl_FragColor = vec4(uColor, a);
       }
     `,
   })
-  const coneGeo = new THREE.ConeGeometry(0.55, 3.4, 20, 1, true)
-  coneGeo.translate(0, -1.7, 0)
-  coneGeo.rotateZ(Math.PI / 2)
-  const beam = s.part(new THREE.Group(), 0.6)
-  beam.position.set(tx, TH + 0.22, tz)
-  const c1 = new THREE.Mesh(coneGeo, beamMat)
-  const c2 = new THREE.Mesh(coneGeo, beamMat)
-  c2.rotation.y = Math.PI
-  c1.renderOrder = c2.renderOrder = 3
-  c1.frustumCulled = c2.frustumCulled = false
-  beam.add(c1, c2)
+  const mesh = new THREE.Mesh(geo, mat)
+  mesh.renderOrder = 3
+  mesh.castShadow = false
+  mesh.receiveShadow = false
+  return { mesh, u: mat.uniforms as { uTime: { value: number } } }
+}
+
+function seo(b: PopBuilder, s: ShopKit) {
+  // the mast stands on a grassy knoll; the transmitter hut sits behind-right
+  const mx = -0.35, mz = -0.42
+  const BASE = 0.26, MH = 1.85, TOP = BASE + MH
+  const SECTIONS = 7
+  /** whip antenna: its LED tip sits this far above the deck */
+  const TIP = 0.56
+  const hw = (y: number) => 0.22 - 0.15 * Math.min(1, Math.max(0, (y - BASE) / MH))
+  const RED = C.roofRed
+  s.keep(mx, mz, 0.95)
+  s.keep(0.72, -0.78, 0.55)
+  s.keep(0.95, 0.5, 0.35)
+
+  // the knoll + rocks
+  b.piece(mx, mz, 0, () => {
+    b.add(new THREE.IcosahedronGeometry(1, 3), vgrad('#8cc86d', '#aadb8a', 0, 0.28), { x: mx, y: -0.28, z: mz, sx: 1.0, sy: 0.56, sz: 0.92 })
+    for (let i = 0; i < 6; i++) {
+      const a = i * 1.07 + 0.3
+      if (Math.abs(a % (Math.PI * 2) - Math.PI / 2) < 0.35) continue
+      b.painted(rockGeometry(i + 2), { x: mx + Math.cos(a) * 0.86, y: -0.03, z: mz + Math.sin(a) * 0.8, s: 0.55 + (i % 3) * 0.14, ry: a })
+    }
+  })
+
+  // the lattice mast: red and white aviation bands, zig-zag bracing
+  b.piece(mx, mz, 0.08, () => {
+    b.rbox(0.62, 0.14, 0.62, 0.04, C.stone, { x: mx, y: BASE - 0.12, z: mz })
+    const corners: [number, number][] = [[1, 1], [1, -1], [-1, -1], [-1, 1]]
+    const P = (i: number, y: number) => {
+      const h = hw(y)
+      return { x: mx + corners[i][0] * h, y, z: mz + corners[i][1] * h }
+    }
+    for (let k = 0; k < SECTIONS; k++) {
+      const ya = BASE + (MH * k) / SECTIONS, yb = BASE + (MH * (k + 1)) / SECTIONS
+      const color = k % 2 ? C.white : RED
+      for (let i = 0; i < 4; i++) {
+        const j = (i + 1) % 4
+        strut(b, P(i, ya), P(i, yb), 0.05, color)
+        strut(b, P(i, yb), P(j, yb), 0.03, color)
+        // zig-zag: alternate the brace direction every section
+        if (k % 2) strut(b, P(i, ya), P(j, yb), 0.022, color)
+        else strut(b, P(j, ya), P(i, yb), 0.022, color)
+      }
+    }
+    // top deck + a short whip antenna with the always-on Hark LED
+    b.rbox(0.34, 0.05, 0.34, 0.015, C.slate, { x: mx, y: TOP - 0.02, z: mz })
+    for (const [cx, cz] of corners) b.cyl(0.008, 0.008, 0.12, 4, C.ink, { x: mx + cx * 0.15, y: TOP + 0.03, z: mz + cz * 0.15 })
+    b.cyl(0.012, 0.02, TIP - 0.04, 6, C.white, { x: mx, y: TOP, z: mz })
+    b.cyl(0.021, 0.021, 0.09, 6, RED, { x: mx, y: TOP + TIP * 0.58, z: mz })
+    b.ledBall(0.06, C.signalBright, { x: mx, y: TOP + TIP, z: mz })
+  })
+
+  // guy wires, anchored in three little concrete blocks
+  b.piece(mx, mz, 0.3, () => {
+    const yA = BASE + MH * 0.62
+    for (const a of [2.62, 4.71, 0.52]) {
+      const ax = mx + Math.cos(a) * 1.02, az = mz + Math.sin(a) * 1.02
+      const h = hw(yA)
+      strut(b, { x: mx + Math.cos(a) * h, y: yA, z: mz + Math.sin(a) * h }, { x: ax, y: 0.06, z: az }, 0.012, '#6b7684')
+      b.rbox(0.12, 0.08, 0.12, 0.02, C.stone, { x: ax, z: az, ry: a })
+      s.keep(ax, az, 0.14)
+    }
+  })
+
+  // the transmitter hut, with a little dish of its own on the roof
+  b.piece(0.72, -0.78, 0.14, () => {
+    b.rbox(0.78, 0.55, 0.6, 0.04, C.white, { x: 0.72, z: -0.78 })
+    b.rbox(0.84, 0.07, 0.66, 0.02, C.roofInk, { x: 0.72, y: 0.55, z: -0.78 })
+    door(b, 0.18, 0.34, 0.87, -0.47, C.navy)
+    windowPane(b, 0.16, 0.16, 0.54, 0.26, -0.475)
+    b.cyl(0.018, 0.018, 0.14, 6, C.ink, { x: 0.58, y: 0.62, z: -0.9 })
+    b.add(dishGeo(0.14, 0.045, false), null, { x: 0.58, y: 0.74, z: -0.9, rz: -0.95, ry: -0.45 })
+    // cable run to the mast
+    b.box(0.5, 0.03, 0.05, C.slate, { x: 0.12, y: 0.02, z: -0.62, ry: 0.16 })
+  })
+
+  // the dish up top, turning slowly on its turntable
+  const DR = 0.28
+  const dish = s.part(vcMesh(bb => {
+    bb.cyl(0.13, 0.14, 0.05, 16, C.slate, { y: 0.025 })
+    bb.box(0.05, 0.17, 0.05, C.slate, { x: 0.05, y: 0.12 })
+    bb.box(0.09, 0.08, 0.1, C.ink, { x: -0.11, y: 0.1 })
+    bb.add(dishGeo(DR, 0.085), null, { x: 0.1, y: 0.27, rz: -1.13 })
+  }), 0.55)
+  dish.position.set(mx, TOP + 0.03, mz)
+
+  // broadcast rings from the tip
+  const rings = signalRings(1.6, 0.46)
+  s.part(rings.mesh, 0.7)
+  rings.mesh.position.set(mx, TOP + TIP, mz)
   s.tick(t => {
-    beam.rotation.y = t * 0.9
-    beam.rotation.z = -0.08
+    dish.rotation.y = t * 0.5
+    rings.u.uTime.value = t * 0.85
   })
 
   // the GEO pin, hovering and turning
@@ -542,8 +647,8 @@ function seo(b: PopBuilder, s: ShopKit) {
     pin.rotation.y = t * 0.9
   })
 
-  s.actor({ shirt: C.navy, pose: loopWalk(tx, tz, 0.72, 0.22, 0.6) })
-  s.actor({ shirt: C.mustard, pose: idle(0.55, 0.85, 0.3) })
+  s.actor({ shirt: C.navy, pose: pingPong(-0.95, 0.6, 0.3, 0.66, 0.22, 2.2, 0.2) })
+  s.actor({ shirt: C.mustard, pose: idle(0.98, -0.28, 0.2) })
 }
 
 // ------------------------------------------------------------------ 05 Page Speed: the speedway
@@ -568,7 +673,7 @@ function pageSpeed(b: PopBuilder, s: ShopKit) {
     b.add(stripGeo(pts, TW, 0.022, true), K.asphalt)
     b.add(stripGeo(sample(TW / 2 - 0.015), 0.022, 0.026, true), C.white)
     b.add(stripGeo(sample(-TW / 2 + 0.015), 0.022, 0.026, true), C.white)
-    // kerbs on the turns (inside)
+    // curbs on the turns (inside)
     for (let i = 0; i < NS; i++) {
       stadium(LS, RT, i / NS, -TW / 2 - 0.035, tmp)
       if (Math.abs(tmp.x) < LS + 0.05) continue
@@ -604,7 +709,7 @@ function pageSpeed(b: PopBuilder, s: ShopKit) {
     b.box(0.05, 0.05, 0.56, C.ink, { x: gx, y: 0.6, z: gz })
     b.rbox(0.085, 0.26, 0.07, 0.02, C.ink, { x: gx, y: 0.34, z: gz + 0.03 })
   })
-  // tyre stacks
+  // tire stacks
   for (const [x, z] of [[-1.95, cz + 0.45], [1.95, cz - 0.45]] as [number, number][]) {
     b.piece(x, z, 0.35, () => {
       for (let i = 0; i < 3; i++) b.add(new THREE.TorusGeometry(0.07, 0.035, 6, 14), C.ink, { x, y: 0.035 + i * 0.07, z, rx: Math.PI / 2 })
@@ -667,7 +772,7 @@ function checkerMaterial() {
   if (!_checker) _checker = new THREE.MeshStandardMaterial({ color: 0xffffff, map: _atlas, roughness: 0.8, side: THREE.DoubleSide })
   return _checker
 }
-/** a plane whose uvs sample the atlas's chequer cell */
+/** a plane whose uvs sample the atlas's checker cell */
 function checkerGeo(w: number, h: number) {
   const g = new THREE.PlaneGeometry(w, h)
   const [u0, v0, u1, v1] = cellUV(CELL.checker)
@@ -1163,7 +1268,7 @@ function wordpress(b: PopBuilder, s: ShopKit) {
       for (let i = 0; i < 4; i++) b.sphere(0.028, i % 2 ? C.blossom : C.mustard, { x: wx - 0.09 + i * 0.06, y: 0.3, z: zf + 0.04 }, 0)
     }
   })
-  // picket fence round the front garden, gate gap by the path
+  // picket fence round the front yard, gate gap by the path
   b.piece(-0.6, 0.45, 0.3, () => {
     const pick = (x: number, z: number) => {
       b.box(0.035, 0.2, 0.02, C.white, { x, y: 0.1, z })
@@ -1232,12 +1337,12 @@ export const PLACES = [
   'Gearworks Isle',
   'Easel Point',
   'Market Cay',
-  'Beacon Rock',
+  'Signal Hill',
   'Speedway Key',
   'Stargazer Isle',
   'Helipad Heights',
   'Firehouse Point',
   'Castle Keep',
   'Open Door Isle',
-  'Postbox Green',
+  'Mailbox Green',
 ]

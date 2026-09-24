@@ -16,6 +16,12 @@ import { LAMP_R, MILL, PLAZA, POND, R, ROAD_C, ROAD_IN, ROAD_OUT, SPOKES, makePl
  *   WAVE   when the "listen" wave front (a radius, from scroll) reaches them
  *   INTRO  a time after the loader hands over (nature: rim trees, rocks, flowers)
  *   LOCAL  at an explicit scroll position (road tiles laid in a sweep, cars)
+ *
+ * The town's core (plaza, park, paths, ring road, lamps, the ring of houses)
+ * is flagged AUTO: it follows max(scroll, intro clock), so on reveal it builds
+ * itself in a couple of seconds and scrolling back never un-builds it. The
+ * rest (trees and bushes among the houses, the windmill, townsfolk, cars)
+ * stays on scroll alone.
  */
 
 const TAU = Math.PI * 2
@@ -38,24 +44,66 @@ const ROAD_A = waveLocal(ROAD_IN - 0.1)
 const ROAD_B = ROAD_A + 0.075
 const SWEEP_START = 1.25
 
+/**
+ * The intro build, as [seconds since it started, scroll-equivalent local] for
+ * the AUTO pieces: the plaza stamps, benches, paths and the park pop, the ring
+ * road sweeps round with its lamps, then the houses pop up around the ring.
+ */
+const AUTO_KEYS: [number, number][] = [
+  [0, WAVE_A],
+  [0.55, waveLocal(2.7)],
+  [0.8, ROAD_A],
+  [1.45, ROAD_B + 0.016],
+  [1.55, waveLocal(4.8)],
+  [2.2, waveLocal(5.55)],
+]
+/** seconds the intro build takes */
+export const AUTO_DUR = AUTO_KEYS[AUTO_KEYS.length - 1][0]
+/** the local the intro build ends at (every AUTO piece is up) */
+export const AUTO_END = AUTO_KEYS[AUTO_KEYS.length - 1][1]
+/** intro clock (seconds; < 0 = not started) → scroll-equivalent local (0 = nothing) */
+export function autoLocal(t: number) {
+  if (!(t >= 0)) return 0
+  for (let i = 1; i < AUTO_KEYS.length; i++) {
+    const [t1, l1] = AUTO_KEYS[i]
+    if (t < t1) {
+      const [t0, l0] = AUTO_KEYS[i - 1]
+      return l0 + ((t - t0) / (t1 - t0)) * (l1 - l0)
+    }
+  }
+  return AUTO_END
+}
+
+/** where the build stands: scroll alone, and scroll + the intro clock (AUTO pieces) */
+export interface BuildState {
+  front: number
+  local: number
+  frontA: number
+  localA: number
+}
+
 class Field extends PopField {
   trig: Uint8Array
   at: Float32Array
+  auto: Uint8Array
   onPop?: (i: number) => void
   constructor(geo: THREE.BufferGeometry, mat: THREE.Material, n: number, cfg: SpringCfg, shadows: { cast?: boolean; receive?: boolean } = {}) {
     super(geo, mat, n, cfg, shadows)
     this.trig = new Uint8Array(n)
     this.at = new Float32Array(n)
+    this.auto = new Uint8Array(n)
   }
-  when(i: number, mode: number, at: number) {
+  when(i: number, mode: number, at: number, auto = false) {
     this.trig[i] = mode
     this.at[i] = at
+    this.auto[i] = auto ? 1 : 0
   }
-  aim(front: number, rt: number, local: number, report: boolean) {
+  aim(b: BuildState, rt: number, report: boolean) {
     const tg = this.springs.tgt
     for (let i = 0; i < this.n; i++) {
       const m = this.trig[i]
-      const v = m === WAVE ? (front >= this.at[i] ? 1 : 0) : m === INTRO ? (rt >= this.at[i] ? 1 : 0) : local >= this.at[i] ? 1 : 0
+      const a = this.auto[i] === 1
+      const v = m === WAVE ? ((a ? b.frontA : b.front) >= this.at[i] ? 1 : 0) : m === INTRO ? (rt >= this.at[i] ? 1 : 0) : (a ? b.localA : b.local) >= this.at[i] ? 1 : 0
       if (v > tg[i] && report) this.onPop?.(i)
       tg[i] = v
     }
@@ -312,7 +360,7 @@ export class Town {
       spots.forEach((s, i) => {
         f.set(i, s.x, 0, s.z, s.ry, s.s, s.sy)
         f.color(i, _c.set(roofs[Math.floor(rand() * roofs.length)]))
-        f.when(i, WAVE, s.r + (s.j - 0.5) * 0.4)
+        f.when(i, WAVE, s.r + (s.j - 0.5) * 0.4, true)
       })
       this.add(f, true, true)
     })
@@ -327,7 +375,8 @@ export class Town {
       let i = 0
       for (const s of town) {
         f.set(i, s.x, 0, s.z, s.ry, s.s)
-        f.when(i++, WAVE, s.r + 0.15 + s.j * 0.35)
+        // park trees are part of the core; the trees among the houses come with scroll
+        f.when(i++, WAVE, s.r + 0.15 + s.j * 0.35, s.r < ROAD_IN)
       }
       for (const s of wild) {
         f.set(i, s.x, 0, s.z, s.ry, s.s)
@@ -343,7 +392,7 @@ export class Town {
       const f = new Field(bushGeometry(v), vc, spots.length, SPRING.small, { cast: false })
       spots.forEach((s, i) => {
         f.set(i, s.x, 0, s.z, s.ry, s.s * 1.1)
-        f.when(i, WAVE, s.r + 0.2 + s.j * 0.3)
+        f.when(i, WAVE, s.r + 0.2 + s.j * 0.3, s.r < ROAD_IN)
       })
       this.add(f)
     }
@@ -396,7 +445,7 @@ export class Town {
       const f = new Field(b.build(), vc, 4, SPRING.road, { cast: false })
       SPOKES.forEach((a, i) => {
         f.set(i, Math.cos(a) * (PLAZA - 0.04), 0, Math.sin(a) * (PLAZA - 0.04), -a)
-        f.when(i, WAVE, 2.2 + i * 0.12)
+        f.when(i, WAVE, 2.2 + i * 0.12, true)
       })
       this.add(f)
     }
@@ -415,7 +464,7 @@ export class Town {
         const a = (i + 0.5) * span
         f.set(i, Math.cos(a) * ROAD_C, 0, Math.sin(a) * ROAD_C, -a)
         const k = (((a - SWEEP_START) % TAU) + TAU) % TAU / TAU
-        f.when(i, LOCAL, ROAD_A + k * (ROAD_B - ROAD_A))
+        f.when(i, LOCAL, ROAD_A + k * (ROAD_B - ROAD_A), true)
       }
       this.add(f)
     }
@@ -434,7 +483,7 @@ export class Town {
           const a = Math.atan2(s.z, s.x)
           f.set(i, s.x, 0, s.z, -a, 0.72)
           const k = (((a - SWEEP_START) % TAU) + TAU) % TAU / TAU
-          f.when(i, LOCAL, ROAD_A + k * (ROAD_B - ROAD_A) + 0.012)
+          f.when(i, LOCAL, ROAD_A + k * (ROAD_B - ROAD_A) + 0.012, true)
         })
         this.add(f)
         const bm = new THREE.InstancedMesh(bulb, MAT.led, plan.lamps.length)
@@ -455,7 +504,7 @@ export class Town {
       const f = new Field(b.build(), vc, plan.benches.length, SPRING.small, { cast: false })
       plan.benches.forEach((s, i) => {
         f.set(i, s.x, 0, s.z, s.ry)
-        f.when(i, WAVE, 1.6 + i * 0.1)
+        f.when(i, WAVE, 1.6 + i * 0.1, true)
       })
       this.add(f)
     }
@@ -472,7 +521,7 @@ export class Town {
       const f = new Field(geo, vc, plan.kiosks.length, SPRING.house)
       plan.kiosks.forEach((s, i) => {
         f.set(i, s.x, 0, s.z, s.ry, 1.05)
-        f.when(i, WAVE, s.r)
+        f.when(i, WAVE, s.r, true)
       })
       this.add(f, true, true)
     }
@@ -602,27 +651,36 @@ export class Town {
     return n
   }
 
+  private bs: BuildState = { front: 0, local: 0, frontA: 0, localA: 0 }
+
   /**
    * @param local  scroll 0..1
+   * @param autoL  the intro clock as a scroll-equivalent local (0 before it
+   *               starts); AUTO pieces follow max(local, autoL)
    * @param rt     seconds since reveal (-1 before)
    * @param jump   snap springs (a nav jump, first frame)
    */
-  update(local: number, rt: number, time: number, dt: number, motion: number, reduced: boolean, jump: boolean) {
+  update(local: number, autoL: number, rt: number, time: number, dt: number, motion: number, reduced: boolean, jump: boolean) {
     const step = time === this.lastTime ? 0 : dt
     this.lastTime = time
-    const front = waveFront(local)
+    const b = this.bs
+    b.local = local
+    b.front = waveFront(local)
+    b.localA = Math.max(local, autoL)
+    b.frontA = waveFront(b.localA)
+    const front = b.front
     const report = !jump && step > 0
     for (const f of this.fields) {
-      f.aim(front, rt, local, report)
+      f.aim(b, rt, report)
       if (jump) f.springs.snap()
       f.update(step, reduced)
     }
-    for (const b of this.bulbs) {
-      ;(b.mesh.instanceMatrix.array as Float32Array).set(b.src.mesh.instanceMatrix.array as Float32Array)
-      b.mesh.instanceMatrix.needsUpdate = true
+    for (const bl of this.bulbs) {
+      ;(bl.mesh.instanceMatrix.array as Float32Array).set(bl.src.mesh.instanceMatrix.array as Float32Array)
+      bl.mesh.instanceMatrix.needsUpdate = true
     }
     // plaza stamp
-    this.plazaSpring.tgt[0] = front >= 1 ? 1 : 0
+    this.plazaSpring.tgt[0] = b.frontA >= 1 ? 1 : 0
     if (jump) this.plazaSpring.snap()
     this.plazaSpring.step(step, reduced)
     squashOf(this.plazaSpring, 0, _sq)

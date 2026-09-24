@@ -5,7 +5,7 @@ import * as THREE from 'three'
  *   0        plain white (every untextured vertex samples it)
  *   1..11    workshop number plates "01".."11": Hark green, ink numerals
  *   12       the International Symbol of Access (blue plate)
- *   13       chequered flag / start line
+ *   13       checkered flag / start line
  */
 export const CELL = { white: 0, number: (k: number) => k + 1, access: 12, checker: 13 }
 
@@ -21,23 +21,44 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
   g.closePath()
 }
 
-async function fontsReady() {
-  if (!document.fonts?.load) return
-  const t = new Promise<void>(r => setTimeout(r, 700))
-  try {
-    await Promise.race([Promise.all([document.fonts.load('700 64px "Space Mono"'), document.fonts.load('italic 600 64px "Fraunces Variable"')]), t])
-  } catch {
-    /* fall back to whatever is there */
-  }
+/** The faces the plates use (never rejects). */
+function loadFonts(): Promise<void> {
+  if (!document.fonts?.load) return Promise.resolve()
+  return Promise.all([document.fonts.load('700 64px "Space Mono"'), document.fonts.load('italic 600 64px "Fraunces Variable"')]).then(
+    () => undefined,
+    () => undefined,
+  )
 }
 
 export async function makeAtlas(renderer: THREE.WebGLRenderer): Promise<THREE.Texture> {
-  await fontsReady()
+  const fonts = loadFonts()
+  let fontsIn = false
+  void fonts.then(() => (fontsIn = true))
+  // give the numerals' face a moment, but never in a hidden tab (timers crawl
+  // there): paint with the fallback now and repaint when the face lands
+  if (!document.hidden) await Promise.race([fonts, new Promise<void>(r => setTimeout(r, 700))])
   const cv = document.createElement('canvas')
   cv.width = cv.height = S * 4
   const g = cv.getContext('2d')!
+  paintAtlas(g)
+
+  const tex = new THREE.CanvasTexture(cv)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy())
+  tex.generateMipmaps = true
+  tex.minFilter = THREE.LinearMipmapLinearFilter
+  tex.needsUpdate = true
+  if (!fontsIn)
+    void fonts.then(() => {
+      paintAtlas(g)
+      tex.needsUpdate = true
+    })
+  return tex
+}
+
+function paintAtlas(g: CanvasRenderingContext2D) {
   g.fillStyle = '#ffffff'
-  g.fillRect(0, 0, cv.width, cv.height)
+  g.fillRect(0, 0, S * 4, S * 4)
 
   const cell = (i: number) => [(i % 4) * S, Math.floor(i / 4) * S] as const
 
@@ -87,7 +108,7 @@ export async function makeAtlas(renderer: THREE.WebGLRenderer): Promise<THREE.Te
     g.stroke()
   }
 
-  // chequers
+  // checkers
   {
     const [x, y] = cell(CELL.checker)
     const n = 8, q = S / n
@@ -97,12 +118,4 @@ export async function makeAtlas(renderer: THREE.WebGLRenderer): Promise<THREE.Te
         g.fillRect(x + i * q, y + j * q, q, q)
       }
   }
-
-  const tex = new THREE.CanvasTexture(cv)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy())
-  tex.generateMipmaps = true
-  tex.minFilter = THREE.LinearMipmapLinearFilter
-  tex.needsUpdate = true
-  return tex
 }

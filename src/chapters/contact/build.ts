@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { C, clay, clayVC } from '../../kit/palette'
-import { fbm2 } from '../../kit/geo'
 import {
   Builder,
   cloudGeometry,
@@ -23,8 +22,10 @@ import {
   scatter,
 } from '../../kit/props'
 import { logoGeometry, logoShapes } from '../../logo/logo'
-import { lerp, rng, smoothstep } from '../../core/math'
-import { beamMaterial, glowTexture, puffMaterial, puffUniforms } from './shaders'
+import { lerp, rng } from '../../core/math'
+import { nextFrame } from '../../core/yield'
+import { beamMaterial, glowTexture } from './shaders'
+import { buildCloudDeck, deckHeight, type CloudDeck } from './clouds'
 
 /*
  * The Lighthouse island, from the shared clay kit (vertex colours, one
@@ -34,7 +35,8 @@ import { beamMaterial, glowTexture, puffMaterial, puffUniforms } from './shaders
  *   holds the glowing Hark mark · the keeper's cottage (smoking chimney,
  *   Hark pennant) · a stepping-stone path with little green LED lamps · a
  *   green post box by the door (its flag goes up when you hover the email) ·
- *   a jetty with a moored rowboat · sailboats on the clouds · gulls.
+ *   a jetty with a moored rowboat · sailboats on the clouds · gulls; all on
+ *   a sunset cloud deck (./clouds.ts).
  *
  * Island-local space: +z faces the camera side, +x is to the right.
  */
@@ -42,11 +44,19 @@ import { beamMaterial, glowTexture, puffMaterial, puffUniforms } from './shaders
 export const R = 4.3
 /** lighthouse footprint centre (island-local) */
 export const LH = new THREE.Vector3(0.55, 0, -0.95)
-/** lantern centre (island-local) */
-export const LANTERN = new THREE.Vector3(LH.x, 5.03, LH.z)
-export const LH_TOP = 6.35
 const H0 = 0.34
 const H1 = 4.5
+/** the gallery deck the lamp room stands on */
+export const GALLERY_Y = H1
+/** the lantern room is drawn a size up (toy proportions) so the Hark mark inside reads */
+const LR = 1.3
+/** lantern centre (island-local) */
+export const LANTERN = new THREE.Vector3(LH.x, H1 + 0.1 + 0.43 * LR, LH.z)
+export const LH_TOP = LANTERN.y + 1.3 * LR
+/** gallery angle of the keeper, (sin, cos) like the camera azimuths: off to the side of every camera */
+export const KEEPER_A = 2.05
+/** the azimuth the lantern's glazing bars leave clear (the finale camera's) */
+const CLEAR_AZ = 0.5
 const JET_A = 0.374
 export const JET_DIR = new THREE.Vector3(Math.cos(JET_A), 0, Math.sin(JET_A))
 const JET_R0 = R * 0.9
@@ -117,39 +127,43 @@ function lighthouse(b: Builder) {
   b.sphere(0.022, C.mustard, { x: x + 0.1, y: H0 + 0.26, z: dz + 0.07 }, 1)
   b.rbox(0.56, 0.08, 0.34, 0.02, C.stone, { x, y: H0 - 0.02, z: dz + 0.2 }, 1)
   // gallery deck + railing
-  b.cyl(0.88, 0.8, 0.1, 32, ink, { x, y: H1 + 0.05, z })
-  b.add(new THREE.TorusGeometry(0.85, 0.018, 5, 48), ink, { x, y: H1 + 0.37, z, rx: Math.PI / 2 })
-  for (let i = 0; i < 20; i++) {
-    const a = (i / 20) * Math.PI * 2
-    b.cyl(0.013, 0.013, 0.3, 5, ink, { x: x + Math.cos(a) * 0.85, y: H1 + 0.23, z: z + Math.sin(a) * 0.85 })
+  b.cyl(0.98, 0.86, 0.1, 32, ink, { x, y: H1 + 0.05, z })
+  b.add(new THREE.TorusGeometry(0.95, 0.018, 5, 48), ink, { x, y: H1 + 0.37, z, rx: Math.PI / 2 })
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2
+    b.cyl(0.013, 0.013, 0.3, 5, ink, { x: x + Math.cos(a) * 0.95, y: H1 + 0.23, z: z + Math.sin(a) * 0.95 })
   }
-  // lantern: base ring, mullions, cap ring, dome roof, ball + weather vane
-  b.cyl(0.47, 0.5, 0.2, 24, red, { x, y: H1 + 0.2, z })
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 + 0.2
-    b.box(0.03, 0.74, 0.03, ink, { x: x + Math.cos(a) * 0.43, y: LANTERN.y, z: z + Math.sin(a) * 0.43, ry: -a })
+  // lantern (a size up): base ring, four glazing bars that leave the finale's
+  // view of the mark clear, cap ring, dome roof, ball + weather vane
+  const k = LR
+  const Y = LANTERN.y
+  b.cyl(0.47 * k, 0.5 * k, 0.2 * k, 24, red, { x, y: H1 + 0.1 + 0.1 * k, z })
+  const clear = Math.PI / 2 - CLEAR_AZ
+  for (let i = 0; i < 4; i++) {
+    const a = clear + Math.PI / 4 + (i * Math.PI) / 2
+    b.box(0.026, 0.74 * k, 0.026, ink, { x: x + Math.cos(a) * 0.43 * k, y: Y, z: z + Math.sin(a) * 0.43 * k, ry: -a })
   }
-  b.cyl(0.53, 0.46, 0.08, 24, ink, { x, y: LANTERN.y + 0.41, z })
-  b.add(new THREE.SphereGeometry(0.5, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), red, { x, y: LANTERN.y + 0.44, z, sy: 0.78 })
-  b.sphere(0.08, ink, { x, y: LANTERN.y + 0.87, z }, 2)
-  b.cyl(0.012, 0.012, 0.42, 5, ink, { x, y: LANTERN.y + 1.08, z })
-  b.box(0.28, 0.018, 0.02, ink, { x: x + 0.03, y: LANTERN.y + 1.18, z, ry: 0.6 })
-  b.add(slab([[0.14, 0.035], [0.14, -0.035], [0.22, 0]], 0.02), ink, { x: x + 0.03, y: LANTERN.y + 1.18, z, ry: 0.6, rx: Math.PI / 2 })
+  b.cyl(0.53 * k, 0.46 * k, 0.08 * k, 24, ink, { x, y: Y + 0.41 * k, z })
+  b.add(new THREE.SphereGeometry(0.5 * k, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), red, { x, y: Y + 0.44 * k, z, sy: 0.78 })
+  b.sphere(0.08 * k, ink, { x, y: Y + 0.87 * k, z }, 2)
+  b.cyl(0.012 * k, 0.012 * k, 0.42 * k, 5, ink, { x, y: Y + 1.08 * k, z })
+  b.box(0.28 * k, 0.018 * k, 0.02 * k, ink, { x: x + 0.03, y: Y + 1.18 * k, z, ry: 0.6 })
+  b.add(slab([[0.14 * k, 0.035 * k], [0.14 * k, -0.035 * k], [0.22 * k, 0]], 0.02 * k), ink, { x: x + 0.03, y: Y + 1.18 * k, z, ry: 0.6, rx: Math.PI / 2 })
 }
 
 /**
  * The Hark mark for the lantern: a light extrusion of a decimated outline
- * (it is ~35 px tall on screen, so every 4th outline point is plenty and the
- * triangulation stays cheap).
+ * (every other outline point: it fills the lantern, and the finale pushes in
+ * on it, but the triangulation stays cheap).
  */
 function markGeometry() {
-  const thin = (pts: THREE.Vector2[]) => pts.filter((_, i) => i % 4 === 0)
+  const thin = (pts: THREE.Vector2[]) => pts.filter((_, i) => i % 2 === 0)
   const shapes = logoShapes().map(sh => {
     const s = new THREE.Shape(thin(sh.getPoints()))
     for (const h of sh.holes) s.holes.push(new THREE.Path(thin(h.getPoints())))
     return s
   })
-  return logoGeometry({ shapes, depth: 0.16, bevel: false, curveSegments: 1 })
+  return logoGeometry({ shapes, depth: 0.1, bevel: false, curveSegments: 1 })
 }
 
 // ------------------------------------------------------------------ the jetty
@@ -181,45 +195,6 @@ function jetty(b: Builder, leds: THREE.Vector3[]) {
   b.rbox(0.24, 0.2, 0.24, 0.02, C.woodDark, { x: c.x + L.x * 0.9, y: JET_Y + 0.12, z: c.z + L.z * 0.9, ry: 0.3 }, 1)
 }
 
-// ------------------------------------------------------------------ cloud-sea puffs
-/**
- * A cumulus heap: a big central puff, a ring of smaller ones and a bump on
- * top, flat underneath; white on top shading to lilac below (vertex colours).
- * ~2.2 units across at scale 1.
- */
-function puffCluster(seed: number, parts: number) {
-  const r = rng(seed * 17 + 3)
-  const geos: THREE.BufferGeometry[] = []
-  const add = (rad: number, x: number, y: number, z: number) => {
-    const g = new THREE.IcosahedronGeometry(rad, 1)
-    g.translate(x, y, z)
-    geos.push(g)
-  }
-  add(0.62, 0, 0.1, 0)
-  for (let i = 0; i < parts; i++) {
-    const a = (i / parts) * Math.PI * 2 + r() * 0.6
-    const d = 0.5 + r() * 0.28
-    add(0.3 + r() * 0.16, Math.cos(a) * d, r() * 0.08, Math.sin(a) * d * 0.85)
-  }
-  add(0.34 + r() * 0.08, (r() - 0.5) * 0.3, 0.46, (r() - 0.5) * 0.2)
-  const g = mergeGeometries(geos, false)!
-  const pos = g.attributes.position
-  const colr = new Float32Array(pos.count * 3)
-  const top = new THREE.Color('#ffffff')
-  const bot = new THREE.Color('#d8cfe4')
-  const c = new THREE.Color()
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i)
-    if (y < 0) pos.setY(i, y * 0.3)
-    c.copy(bot).lerp(top, Math.min(1, Math.max(0, (y + 0.15) / 0.75)))
-    colr.set([c.r, c.g, c.b], i * 3)
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(colr, 3))
-  g.deleteAttribute('uv')
-  g.computeBoundingSphere()
-  return g
-}
-
 // ------------------------------------------------------------------ scene
 export interface LighthouseScene {
   island: THREE.Group
@@ -244,36 +219,11 @@ export interface LighthouseScene {
   farBoat: THREE.Group | null
   rowboat: THREE.Group
   rowboatAt: THREE.Vector3
-  puffs: THREE.InstancedMesh[]
+  deck: CloudDeck
   upper: THREE.InstancedMesh
-  puffU: ReturnType<typeof puffUniforms>
   /** island-local points that must stay inside the art rect */
   fitPoints: THREE.Vector3[]
 }
-
-/**
- * Yield a frame between heavy build steps. rAF never fires in a hidden tab,
- * so there we yield with a message-channel macrotask (not timer-throttled),
- * and a timeout guards a tab hidden mid-wait.
- */
-const tick = () =>
-  new Promise<void>(resolve => {
-    let done = false
-    const r = () => {
-      if (!done) {
-        done = true
-        resolve()
-      }
-    }
-    if (document.hidden) {
-      const ch = new MessageChannel()
-      ch.port1.onmessage = r
-      ch.port2.postMessage(0)
-      return
-    }
-    requestAnimationFrame(r)
-    setTimeout(r, 150)
-  })
 
 export async function buildScene(root: THREE.Group, mobile: boolean): Promise<LighthouseScene> {
   const rand = rng(1907)
@@ -294,7 +244,7 @@ export async function buildScene(root: THREE.Group, mobile: boolean): Promise<Li
     detail: mobile ? 0.6 : 0.9,
   })
   island.add(rock)
-  await tick()
+  await nextFrame()
 
   const decor = new THREE.Group()
   const put = (o: THREE.Object3D, x: number, y: number, z: number, ry = 0, s = 1) => {
@@ -378,7 +328,7 @@ export async function buildScene(root: THREE.Group, mobile: boolean): Promise<Li
   const porch = new THREE.Vector3(0.33, 0.66, COTTAGE.d / 2 + 0.06).applyMatrix4(cottageM)
   ledPos.push(porch)
   ledOrder.push(0.1)
-  await tick()
+  await nextFrame()
 
   // ---------------- path, garden, trees, rocks
   decor.add(makePath(walkPath.points.map(p => p.clone().setY(0)), { width: 0.44, stones: true, seed: 5 }))
@@ -423,10 +373,10 @@ export async function buildScene(root: THREE.Group, mobile: boolean): Promise<Li
     put(makeRock(i + 40, 1.8 + rand()), LH.x + Math.cos(a) * 1.08, -0.02, LH.z + Math.sin(a) * 1.08, rand() * 6)
   }
   put(makeBench(), -0.4, 0, 2.3, -0.35)
-  await tick()
+  await nextFrame()
 
   island.add(mergeStatic(decor))
-  await tick()
+  await nextFrame()
   if (!mobile) {
     // wild flowers in the grass
     const pts: { x: number; z: number; s: number }[] = []
@@ -457,12 +407,12 @@ export async function buildScene(root: THREE.Group, mobile: boolean): Promise<Li
     color: '#e6fff2',
     roughness: 0.08,
     transparent: true,
-    opacity: 0.2,
+    opacity: 0.14,
     depthWrite: false,
     emissive: new THREE.Color('#c8ffe2'),
     emissiveIntensity: 0,
   })
-  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.74, 24, 1, true), glassMat)
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.42 * LR, 0.42 * LR, 0.74 * LR, 24, 1, true), glassMat)
   glass.position.copy(LANTERN)
   glass.renderOrder = 3
   island.add(glass)
@@ -473,13 +423,15 @@ export async function buildScene(root: THREE.Group, mobile: boolean): Promise<Li
     emissive: new THREE.Color(C.signalBright),
     emissiveIntensity: 0,
   })
-  await tick()
+  await nextFrame()
+  // the mark fills the lantern and turns to face the camera (the chapter
+  // yaws it each frame); only the beams spin
   const mark = new THREE.Mesh(markGeometry(), markMat)
-  mark.scale.setScalar(0.58)
+  mark.scale.setScalar(0.74)
   mark.position.copy(LANTERN)
   island.add(mark)
 
-  await tick()
+  await nextFrame()
   const glow = new THREE.Sprite(
     new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
   )
@@ -566,11 +518,9 @@ export async function buildScene(root: THREE.Group, mobile: boolean): Promise<Li
   // ---------------- people
   const keeper = makePerson(C.roofBlue, 4)
   keeper.scale.setScalar(0.85)
-  {
-    const a = 0.75
-    keeper.position.set(LH.x + Math.sin(a) * 0.68, H1 + 0.1, LH.z + Math.cos(a) * 0.68)
-    keeper.rotation.y = a
-  }
+  // on the gallery, round the side (never between a camera and the mark)
+  keeper.position.set(LH.x + Math.sin(KEEPER_A) * 0.8, H1 + 0.1, LH.z + Math.cos(KEEPER_A) * 0.8)
+  keeper.rotation.y = KEEPER_A
   island.add(keeper)
   const walker = makePerson(C.coral, 9)
   island.add(walker)
@@ -590,6 +540,8 @@ export async function buildScene(root: THREE.Group, mobile: boolean): Promise<Li
     .multiplyScalar(JET_R0 + JET_LEN - 0.55)
     .add(new THREE.Vector3(-JET_DIR.z, 0, JET_DIR.x).multiplyScalar(-0.72))
     .setY(-0.34)
+  // afloat on the deck (under the jetty's planks)
+  rowboatAt.setY(Math.min(-0.3, deckHeight(rowboatAt.x, rowboatAt.z) + 0.1))
   rowboat.position.copy(rowboatAt)
   rowboat.rotation.y = -JET_A + 0.1
   island.add(rowboat)
@@ -597,68 +549,10 @@ export async function buildScene(root: THREE.Group, mobile: boolean): Promise<Li
   const gulls = makeBirds({ count: mobile ? 4 : 7, radius: 2.6, height: 0.6, seed: 5, size: 0.17 })
   gulls.position.set(LANTERN.x, LANTERN.y, LANTERN.z)
   island.add(gulls)
-  await tick()
+  await nextFrame()
 
-  // ---------------- the sea of clouds
-  const puffU = puffUniforms()
-  const puffMat = puffMaterial(puffU)
-  const variants = 3
-  const lists: THREE.Matrix4[][] = Array.from({ length: variants * 2 }, () => [])
-  {
-    const pr = rng(77)
-    // sectors the cameras look across: behind the island (hold → finale) and toward the final camera
-    const farA = Math.PI + 0.1
-    const camA = 0.45
-    const k = mobile ? 1.45 : 1
-    const spacing = (r: number) => k * (1.9 + r * 0.06)
-    const maxR = mobile ? 95 : 125
-    const q = new THREE.Quaternion()
-    const e = new THREE.Euler()
-    let r = R * 0.9
-    while (r < maxR) {
-      const s = spacing(r)
-      const cnt = Math.max(8, Math.floor((2 * Math.PI * r) / s))
-      const off = pr() * 6.283
-      for (let i = 0; i < cnt; i++) {
-        const a = off + (i / cnt) * Math.PI * 2 + (pr() - 0.5) * (s / r) * 0.8
-        const dFar = Math.abs(Math.atan2(Math.sin(a - farA), Math.cos(a - farA)))
-        const dCam = Math.abs(Math.atan2(Math.sin(a - camA), Math.cos(a - camA)))
-        if (r > 34 && dFar > 1.05 && !(r < 90 && dCam < 0.5)) continue
-        if (r > 62 && dFar > 0.8) continue
-        const rr = r + (pr() - 0.5) * s * 0.5
-        const x = Math.sin(a) * rr
-        const z = Math.cos(a) * rr
-        const shore = smoothstep(R * 1.4, R * 0.95, rr)
-        // slow swells: calm troughs, billowing crests, and now and then a gap
-        // down into the deep sky (never right round the island)
-        const n = fbm2(x * 0.045 + 3.1, z * 0.045 - 7.7, 3)
-        if (rr > R * 2.1 && rr < 60 && n < 0.34 + pr() * 0.05) continue
-        const swell = smoothstep(0.3, 0.72, n)
-        const big = rr < 30 && pr() < 0.1 ? 1.3 : 1
-        const sc = s * (0.5 + pr() * 0.3) * big * (1 - shore * 0.35) * lerp(0.82, 1.22, swell)
-        const sy = sc * (0.5 + pr() * 0.4) * lerp(0.85, 1.2, swell)
-        const top = -0.55 + (pr() - 0.5) * 0.26 + shore * 0.2 + (big > 1 ? 0.2 : 0) + (swell - 0.5) * 0.5 * (1 - shore)
-        q.setFromEuler(e.set(0, pr() * 6.28, 0))
-        const m = new THREE.Matrix4().compose(new THREE.Vector3(x, top - sy * 0.62, z), q, new THREE.Vector3(sc, sy, sc * (0.8 + pr() * 0.4)))
-        lists[Math.floor(pr() * variants) + (rr < 30 ? 0 : variants)].push(m)
-      }
-      r += s * 0.8
-    }
-  }
-  const puffs: THREE.InstancedMesh[] = []
-  for (let v = 0; v < variants * 2; v++) {
-    const list = lists[v]
-    if (!list.length) continue
-    const near = v < variants
-    const geo = puffCluster(v % variants, near && !mobile ? 5 : 4)
-    const im = new THREE.InstancedMesh(geo, puffMat, list.length)
-    list.forEach((m, i) => im.setMatrixAt(i, m))
-    im.receiveShadow = true
-    im.castShadow = false
-    im.computeBoundingSphere()
-    root.add(im)
-    puffs.push(im)
-  }
+  // ---------------- the sea of clouds: a continuous floor and a few big heaps
+  const deck = await buildCloudDeck(root, mobile)
 
   // the cloud bank the camera sinks through at the start (placed by the chapter after fitting)
   const upper = new THREE.InstancedMesh(cloudGeometry(2), cloudMaterial(), mobile ? 10 : 16)
@@ -667,7 +561,7 @@ export async function buildScene(root: THREE.Group, mobile: boolean): Promise<Li
   upper.receiveShadow = false
   root.add(upper)
 
-  await tick()
+  await nextFrame()
   // ---------------- fit points (island-local): shore ring, lighthouse top, jetty end
   const fitPoints: THREE.Vector3[] = []
   for (let i = 0; i < 16; i++) {
@@ -702,9 +596,8 @@ export async function buildScene(root: THREE.Group, mobile: boolean): Promise<Li
     farBoat,
     rowboat,
     rowboatAt,
-    puffs,
+    deck,
     upper,
-    puffU,
     fitPoints,
   }
 }

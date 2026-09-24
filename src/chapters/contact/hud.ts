@@ -120,10 +120,18 @@ export function buildHud(stage: HTMLElement): Hud {
   top.type = 'button'
   el('span', '', 'Back to top', top)
   el('span', 'ct-arr', '↑', top).setAttribute('aria-hidden', 'true')
-  top.addEventListener('click', () => window.__hark?.goto(0))
+  // a long jump: land() runs the engine's cloud-wipe cut (goto would hard-cut
+  // dusk → morning); on keyboard activation (click.detail 0) focus follows to
+  // the hero's heading, as the chrome's nav does
+  top.addEventListener('click', e => {
+    const hark = window.__hark
+    if (!hark) return
+    hark.land('hero')
+    if (e.detail === 0) hark.engine?.focusChapter('hero')
+  })
 
   const foot = el('p', 'ct-foot ct-in', undefined, plate)
-  const parts = [`© 2026 ${BRAND.name}`, ...BRAND.locale.split(' · ')]
+  const parts = [`© ${new Date().getFullYear()} ${BRAND.name}`, ...BRAND.locale.split(' · ')]
   parts.forEach((p, i) => {
     if (i) foot.append(' · ')
     el('span', 'ct-nw', p, foot)

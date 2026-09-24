@@ -14,12 +14,13 @@ import { clamp, lerp, segment, smoothstep } from '../../core/math'
  *                           of the building stacks up inside it
  *   0.41–0.62  3 BUILD      the mock-up folds away, the ground floor pops up,
  *                           the tower crane lifts three floors into place
- *   0.62–0.77  4 SUPPORT    topping out, scaffold comes down, the site clutter
+ *   0.62–0.752 4 SUPPORT    topping out, scaffold comes down, the site clutter
  *                           flattens away and the yard turns to lawn, the green
  *                           sign lights, windows glow, a gardener plants trees,
  *                           the mixer leaves and the Hark maintenance van parks
- *   0.775–0.95 the hoarding panels revolve to show the three stats (the
- *              engine's cloud wipe starts rolling in around 0.9)
+ *   0.757–0.95 the site-fence panels revolve to show the three stats, all
+ *              up by ~0.79 and held clear until the engine's cloud wipe
+ *              starts rolling in (~0.92 at 2.2 vh)
  *   0.92–1.00  rise into the clouds (cloud wipe out)
  */
 
@@ -27,9 +28,9 @@ export const STEPS: [number, number][] = [
   [0.07, 0.25],
   [0.25, 0.41],
   [0.41, 0.62],
-  [0.62, 0.77],
+  [0.62, 0.752],
 ]
-export const STATS_AT = [0.775, 0.79, 0.805]
+export const STATS_AT = [0.757, 0.769, 0.781]
 export const HEAD_IN = 0.045
 export const HUD_OUT = 0.95
 
@@ -77,12 +78,15 @@ export const ENTRANCE_AT = 0.705
 export const BUNTING_AT = 0.712
 export const TECH_AT = 0.73
 
-/** keyboard stops, one per step (step 3 lands with the last floor swinging over) */
-export const ANCHORS = [0.18, 0.385, lerp(LIFTS[2][0], LIFTS[2][1], 0.6), 0.76]
+/**
+ * keyboard stops, one per step (step 3 lands with the last floor swinging
+ * over), then the stats settled on the site fence
+ */
+export const ANCHORS = [0.18, 0.385, lerp(LIFTS[2][0], LIFTS[2][1], 0.6), 0.742, 0.85]
 
 // ------------------------------------------------------------------ site layout (site-local units)
 
-/** the building's footprint centre and size */
+/** the building's footprint center and size */
 export const B = new THREE.Vector3(0, 0, -0.5)
 export const FOOT = { w: 2.4, d: 1.8 }
 export const FLOOR_H = 0.6
@@ -180,7 +184,7 @@ export const stepProgress = (l: number, i: number) => clamp((l - STEPS[i][0]) / 
 // ------------------------------------------------------------------ camera shots
 
 export interface Shot {
-  /** subject centre (site-local, y up) */
+  /** subject center (site-local, y up) */
   p: [number, number, number]
   /** azimuth from +z toward +x, degrees */
   az: number
@@ -209,8 +213,8 @@ export const WIDE: Key[] = [
   k(0.44, [-0.6, 1.9, -0.9], -4, 29, 13.2, 11),
   k(0.596, [-0.6, 2.0, -0.9], -12, 28, 12.6, 11),
   k(0.67, [0.2, 1.4, -0.6], -20, 30, 13.8, 11.2),
-  k(0.76, [0.3, 1.3, -0.4], -25, 31, 13.2, 10.6),
-  k(0.84, [0.1, 1.0, 1.5], -6, 21, 9.4, 6.4),
+  k(0.745, [0.3, 1.3, -0.4], -25, 31, 13.2, 10.6),
+  k(0.82, [0.1, 1.0, 1.5], -6, 21, 9.4, 6.4),
   k(0.92, [0.1, 1.05, 1.2], -3, 25, 10.8, 7.6),
   k(1.0, [0.1, 1.8, -0.4], 4, 64, 30, 26, 17),
 ]
@@ -225,8 +229,8 @@ export const TALL: Key[] = [
   k(0.44, [-0.6, 1.9, -0.9], -4, 33, 12.4, 11.6),
   k(0.596, [-0.6, 2.0, -0.9], -12, 32, 12, 11.6),
   k(0.67, [0.2, 1.4, -0.6], -20, 34, 12.8, 11.4),
-  k(0.76, [0.3, 1.3, -0.4], -25, 35, 12.4, 11),
-  k(0.84, [0.1, 1.3, 1.2], -6, 27, 10, 9.6),
+  k(0.745, [0.3, 1.3, -0.4], -25, 35, 12.4, 11),
+  k(0.82, [0.1, 1.3, 1.2], -6, 27, 10, 9.6),
   k(0.92, [0, 0.95, 0.9], -3, 31, 11.2, 9.4),
   k(1.0, [0.1, 1.8, -0.4], 4, 66, 26, 26, 17),
 ]

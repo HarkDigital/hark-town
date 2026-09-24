@@ -1,11 +1,24 @@
 import { BRAND, MICROCOPY } from '../../content'
 import { el, rise, setRise } from '../../core/dom'
+import type { NdcRect } from '../../world/World'
 
 /** 'Philadelphia · Everywhere · est. 2016' → 'est. 2016' */
 const EST = (BRAND.locale.split('·').pop() ?? '').trim()
 const REDUCED = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
 /** keep 'est. 2016' together and each '·' with the word before it */
 const glue = (s: string) => s.replace(/est\.\s+(\d{4})/i, 'est.\u00a0$1').replace(/\s+·/g, '\u00a0·')
+
+/** layout box of `node` relative to `root` (ignores transforms, so springy pops don't skew it) */
+function boxIn(node: HTMLElement, root: HTMLElement) {
+  let x = 0, y = 0
+  let n: HTMLElement | null = node
+  while (n && n !== root) {
+    x += n.offsetLeft
+    y += n.offsetTop
+    n = n.offsetParent as HTMLElement | null
+  }
+  return { l: x, t: y, r: x + node.offsetWidth, b: y + node.offsetHeight }
+}
 
 /**
  * The hero's signage:
@@ -26,6 +39,10 @@ export class HeroUI {
   private title: HTMLElement
   private probe: HTMLElement
   private shown = -1
+  /** which copy block is up: 0 none · 1 welcome · 2 town sign · 3 payoff */
+  private block = 0
+  /** cached copy boxes in NDC (re-measured on resize / content size change, never per frame) */
+  private boxes: NdcRect[] = [0, 1, 2, 3].map(() => ({ x0: 0, y0: 0, x1: 0, y1: 0 }))
   /** chrome safe bands in px (measured on resize, never per frame) */
   safe = { top: 96, bottom: 90, side: 24 }
   /** NDC x of the welcome column's right edge (landscape keep-out for the camera) */
@@ -72,6 +89,35 @@ export class HeroUI {
 
     this.measure()
     window.addEventListener('resize', () => this.measure())
+    // fonts landing or copy reflowing change the boxes without a resize
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => this.measureCopy())
+      for (const n of [this.welcome, this.hint, this.sign, this.pay]) ro.observe(n)
+    }
+  }
+
+  /** Cache the copy blocks' boxes in NDC (padded) for the world's far-field keep-out. */
+  private measureCopy() {
+    const w = this.root.clientWidth, h = this.root.clientHeight
+    if (w < 10 || h < 10) return
+    const pad = 18
+    const set = (out: NdcRect, l: number, t: number, r: number, b: number) => {
+      out.x0 = ((l - pad) / w) * 2 - 1
+      out.x1 = ((r + pad) / w) * 2 - 1
+      out.y0 = 1 - ((b + pad) / h) * 2
+      out.y1 = 1 - ((t - pad) / h) * 2
+    }
+    const a = boxIn(this.welcome, this.root), hb = boxIn(this.hint, this.root)
+    set(this.boxes[1], Math.min(a.l, hb.l), Math.min(a.t, hb.t), Math.max(a.r, hb.r), Math.max(a.b, hb.b))
+    const s = boxIn(this.sign, this.root)
+    set(this.boxes[2], s.l, s.t, s.r, s.b)
+    const p = boxIn(this.pay, this.root)
+    set(this.boxes[3], p.l, p.t, p.r, p.b)
+  }
+
+  /** The copy block on screen now, in NDC, or null when no copy shows. */
+  copyRect(): NdcRect | null {
+    return this.block ? this.boxes[this.block] : null
   }
 
   /** The chrome's safe bands, measured once and on resize. */
@@ -87,6 +133,7 @@ export class HeroUI {
     this.safe.side = r.left - host.left
     const d = this.dock.getBoundingClientRect()
     this.keepLeft = this.root.classList.contains('is-port') ? -1 : ((d.right - host.left) / host.width) * 2 - 1
+    this.measureCopy()
   }
 
   update(p: { local: number; intro: number; portrait: boolean; pop: number }) {
@@ -113,5 +160,6 @@ export class HeroUI {
     const payOn = local > 0.64 && local < 0.93
     this.pay.classList.toggle('is-in', payOn)
     setRise(this.title, payOn)
+    this.block = payOn ? 3 : signOn ? 2 : welcomeOn ? 1 : 0
   }
 }
