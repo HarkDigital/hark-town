@@ -1,0 +1,348 @@
+/* ------------------------------------------------------------------
+   Town Square (voices) — header, map pins, comic speech bubbles.
+   Every selector is scoped under .stage-voices.
+   ------------------------------------------------------------------ */
+
+/* measures the safe area for the JS layout (never visible) */
+.stage-voices .vo-probe {
+  position: absolute;
+  top: var(--safe-top);
+  bottom: var(--safe-bottom);
+  left: var(--gutter);
+  right: var(--gutter);
+  visibility: hidden !important;
+  pointer-events: none;
+}
+
+/* ---------------- header ---------------- */
+
+.stage-voices .vo-head {
+  position: absolute;
+  left: var(--gutter);
+  top: var(--safe-top);
+  max-width: min(46vw, 660px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: clamp(10px, 1.6vh, 16px);
+}
+.stage-voices .vo-title {
+  font-size: clamp(2.5rem, 5.4vw, 5.6rem);
+  line-height: 0.94;
+}
+.stage-voices .vo-eyebrow {
+  padding: 7px 13px 7px 10px;
+  border-radius: 999px;
+  background: rgba(251, 250, 246, 0.82);
+  box-shadow: 0 4px 14px rgba(38, 56, 72, 0.1);
+  transform-origin: 12px 50%;
+  transform: scale(0.4);
+  opacity: 0;
+  transition:
+    transform 0.25s ease,
+    opacity 0.2s ease;
+}
+.stage-voices .vo-head.is-on .vo-eyebrow {
+  transform: none;
+  opacity: 1;
+  transition:
+    transform 0.55s cubic-bezier(0.3, 1.6, 0.5, 1),
+    opacity 0.15s ease;
+}
+.stage-voices .vo-head .rise-w > span {
+  transition-delay: calc(0.08s + var(--i, 0) * 55ms);
+}
+
+/* ---------------- overview pins ---------------- */
+
+.stage-voices .vo-pin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  pointer-events: none;
+  will-change: transform;
+}
+.stage-voices .vo-pin-in {
+  position: absolute;
+  left: -15px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow:
+    0 3px 0 rgba(29, 35, 33, 0.14),
+    0 8px 20px rgba(38, 56, 72, 0.18);
+  transform-origin: 15px 100%;
+  transform: scale(0);
+  opacity: 0;
+  transition:
+    transform 0.22s ease,
+    opacity 0.18s ease;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.stage-voices .vo-pin-in::after {
+  /* the pointer under the pin */
+  content: '';
+  position: absolute;
+  left: 10px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  background: var(--paper);
+  transform: rotate(45deg);
+  border-radius: 0 0 3px 0;
+}
+.stage-voices .vo-pin-n {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--signal);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 0 0 2px var(--paper);
+}
+.stage-voices .vo-pin-name {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  max-width: 0;
+  overflow: hidden;
+  padding: 0;
+  transition:
+    max-width 0.35s cubic-bezier(0.3, 1.3, 0.5, 1),
+    padding 0.35s ease;
+}
+.stage-voices .vo-pin.is-on {
+  pointer-events: auto;
+}
+.stage-voices .vo-pin.is-on .vo-pin-in {
+  transform: none;
+  opacity: 1;
+  transition:
+    transform 0.55s cubic-bezier(0.3, 1.7, 0.5, 1),
+    opacity 0.15s ease;
+  transition-delay: calc(0.12s + var(--i, 0) * 70ms);
+}
+@media (hover: hover) {
+  .stage-voices .vo-pin.is-on:hover .vo-pin-name,
+  .stage-voices .vo-pin.is-on:focus-visible .vo-pin-name {
+    max-width: 220px;
+    padding: 0 12px 0 8px;
+  }
+  .stage-voices .vo-pin.is-on:hover .vo-pin-in {
+    transform: translateY(-3px);
+    transition-delay: 0s;
+  }
+}
+
+/* ---------------- speech bubbles ---------------- */
+
+.stage-voices .vo-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+  visibility: hidden;
+  transition: visibility 0s linear 0.4s;
+}
+.stage-voices .vo-bubble.is-on {
+  visibility: visible;
+  transition-delay: 0s;
+}
+.stage-voices .vo-pop {
+  position: relative;
+  transform: scale(0.3);
+  opacity: 0;
+  transition:
+    transform 0.26s cubic-bezier(0.5, 0, 0.75, 0),
+    opacity 0.2s ease 0.05s;
+}
+.stage-voices .vo-bubble.is-on .vo-pop {
+  transform: none;
+  opacity: 1;
+  transition:
+    transform 0.62s cubic-bezier(0.3, 1.5, 0.5, 1),
+    opacity 0.14s ease;
+}
+.stage-voices .vo-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  filter: drop-shadow(0 14px 24px rgba(38, 56, 72, 0.16));
+}
+.stage-voices .vo-shape {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+}
+.stage-voices .vo-shadow {
+  fill: rgba(29, 35, 33, 0.13);
+  transform: translate(0, 6px);
+}
+.stage-voices .vo-leader {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.4px;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 7;
+  opacity: 0.62;
+}
+
+.stage-voices .vo-body {
+  position: relative;
+  width: clamp(300px, 20vw + 170px, 480px);
+  padding: 18px 24px 20px 26px;
+}
+.stage-voices .vo-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.stage-voices .vo-meta::before {
+  content: '';
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 3px rgba(0, 226, 122, 0.22);
+}
+.stage-voices .vo-q {
+  margin: 0;
+  padding: 0;
+}
+.stage-voices .vo-q .hud-quote {
+  font-size: clamp(16.5px, 0.85vw + 8.5px, 22px);
+  line-height: 1.28;
+  letter-spacing: -0.008em;
+  font-variation-settings: 'SOFT' 100, 'WONK' 0, 'opsz' 36;
+  font-weight: 460;
+  text-indent: -0.42em;
+}
+.stage-voices .vo-q .rise-w,
+.stage-voices .vo-q .rise-w > span {
+  text-indent: 0;
+}
+/* long quotes: a quick ripple so the whole quote lands in ~0.8 s */
+.stage-voices .vo-q .rise.is-in .rise-w > span {
+  transition-delay: calc(0.1s + min(var(--i, 0), 44) * 13ms);
+}
+.stage-voices .vo-cap {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 14px 0 0;
+}
+.stage-voices .vo-av {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #dcebf2;
+  box-shadow:
+    0 0 0 2px var(--paper),
+    0 0 0 4px var(--ink);
+}
+.stage-voices .vo-av svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.stage-voices .vo-who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.stage-voices .vo-name {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.25;
+  color: var(--fg);
+}
+.stage-voices .vo-co {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  line-height: 1.35;
+}
+.stage-voices .vo-cap .rise-w > span {
+  transition-delay: calc(0.3s + var(--i, 0) * 40ms);
+}
+
+/* docked (portrait / phones): a signage plate above the bottom chrome */
+.stage-voices .vo-bubble.is-dock .vo-body {
+  width: min(560px, calc(100vw - 2 * var(--gutter)));
+  padding: 15px 18px 16px 20px;
+}
+.stage-voices .vo-bubble.is-dock .vo-q .hud-quote {
+  font-size: clamp(15px, 1.2vw + 11px, 19px);
+  line-height: 1.3;
+}
+.stage-voices .vo-bubble.is-dock .vo-meta {
+  margin-bottom: 8px;
+}
+.stage-voices .vo-bubble.is-dock .vo-cap {
+  margin-top: 11px;
+}
+
+@media (max-height: 700px) {
+  .stage-voices .vo-bubble.is-dock .vo-q .hud-quote {
+    font-size: 14.5px;
+    line-height: 1.28;
+  }
+  .stage-voices .vo-bubble.is-dock .vo-body {
+    padding: 13px 16px 14px 18px;
+  }
+}
+
+@media (max-aspect-ratio: 17/20), (max-width: 640px) {
+  .stage-voices .vo-head {
+    right: var(--gutter);
+    max-width: none;
+  }
+  .stage-voices .vo-title {
+    font-size: clamp(2.3rem, 9.6vw, 4.4rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-voices .vo-pop,
+  .stage-voices .vo-bubble.is-on .vo-pop {
+    transform: none;
+  }
+}

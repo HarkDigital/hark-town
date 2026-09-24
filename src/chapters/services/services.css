@@ -1,0 +1,533 @@
+/* The Works — wayfinding signage for the workshop archipelago. Every selector is scoped to .stage-services. */
+
+.stage-services {
+  --svc-w: min(420px, 34vw);
+  --svc-intro: min(31vw, 500px);
+}
+
+/* the safe band, measured by hud.ts */
+.stage-services .svc-probe {
+  position: absolute;
+  top: var(--safe-top);
+  bottom: var(--safe-bottom);
+  left: 0;
+  width: 1px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ---------------- intro ---------------- */
+.stage-services .svc-intro {
+  position: absolute;
+  left: var(--gutter);
+  top: var(--safe-top);
+  bottom: var(--safe-bottom);
+  width: var(--svc-intro);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  visibility: hidden;
+  transition: visibility 0s linear 0.35s;
+}
+.stage-services .svc-intro.is-on {
+  visibility: visible;
+  transition-delay: 0s;
+}
+.stage-services .svc-intro .hud-eyebrow,
+.stage-services .svc-hint {
+  opacity: 0;
+  transform: translate3d(0, 8px, 0);
+  transition:
+    opacity 0.2s ease,
+    transform 0.3s ease;
+}
+.stage-services .svc-intro.is-on .hud-eyebrow,
+.stage-services .svc-intro.is-on .svc-hint {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.3s ease 0.1s,
+    transform 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) 0.1s;
+}
+.stage-services .svc-intro.is-on .svc-hint {
+  transition-delay: 0.45s;
+}
+.stage-services .svc-intro-title {
+  font-size: clamp(2.8rem, 4.9vw, 5.6rem);
+}
+.stage-services .svc-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--fg);
+}
+.stage-services .svc-hint-arrow {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 2px 0 #07a85d;
+  animation: svc-bob 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+.stage-services .svc-hint-arrow::after {
+  content: '';
+  position: absolute;
+  left: 7.5px;
+  top: 5px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  transform: rotate(45deg);
+}
+@keyframes svc-bob {
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+/* ---------------- the signage plate ---------------- */
+.stage-services .svc-col {
+  position: absolute;
+  left: var(--gutter);
+  top: var(--safe-top);
+  bottom: var(--safe-bottom);
+  width: var(--svc-w);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  visibility: hidden;
+  opacity: 0;
+  transform: translate3d(-18px, 0, 0);
+  transition:
+    opacity 0.25s ease,
+    transform 0.3s ease,
+    visibility 0s linear 0.3s;
+}
+.stage-services .svc-col.is-on {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.25s ease,
+    transform 0.55s cubic-bezier(0.3, 1.5, 0.5, 1),
+    visibility 0s;
+}
+.stage-services .svc-plate {
+  padding: 22px 24px 18px;
+  border-radius: 22px;
+  background: rgba(251, 250, 246, 0.93);
+  border: 1.5px solid rgba(29, 35, 33, 0.1);
+  box-shadow:
+    0 5px 0 rgba(29, 35, 33, 0.08),
+    var(--shadow);
+  transform-origin: 50% -30px;
+  color: var(--ink);
+}
+/* little screws, like a real sign plate */
+.stage-services .svc-screw {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff 0 25%, #c9c3b6 60%);
+  box-shadow: inset 0 0 0 1px rgba(29, 35, 33, 0.18);
+}
+.stage-services .svc-screw--tl {
+  left: 10px;
+  top: 10px;
+}
+.stage-services .svc-screw--tr {
+  right: 10px;
+  top: 10px;
+}
+.stage-services .svc-screw--bl {
+  left: 10px;
+  bottom: 10px;
+}
+.stage-services .svc-screw--br {
+  right: 10px;
+  bottom: 10px;
+}
+
+/* all eleven slides share one grid cell. On wide screens the plate fits the
+   slide on show (the camera only needs its right edge); in portrait it keeps
+   the tallest slide's size so the island above never re-frames. */
+.stage-services .svc-slides {
+  position: relative;
+  display: grid;
+}
+.stage-services .svc-slide {
+  grid-area: 1 / 1;
+  align-self: start;
+  visibility: hidden;
+  transition: visibility 0s linear 0.2s;
+}
+.stage-services .svc-slide:not(.is-on) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+.stage-services .svc-slide.is-on {
+  visibility: visible;
+  transition-delay: 0s;
+}
+.stage-services .svc-slide > :not(.svc-title) {
+  opacity: 0;
+  transform: translate3d(0, 8px, 0);
+  transition:
+    opacity 0.16s ease,
+    transform 0.2s ease;
+}
+.stage-services .svc-slide.is-on > :not(.svc-title) {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.3s ease 0.12s,
+    transform 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) 0.12s;
+}
+.stage-services .svc-slide.is-on > .svc-tags {
+  transition-delay: 0.22s;
+}
+.stage-services .svc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 0 4px 12px;
+  border-bottom: 1.5px dashed var(--line-strong);
+}
+.stage-services .svc-place {
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stage-services .svc-count {
+  margin: 0;
+  white-space: nowrap;
+  color: rgba(29, 35, 33, 0.72);
+}
+.stage-services .svc-count b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.stage-services .svc-title {
+  font-size: clamp(1.8rem, 2.55vw, 2.75rem);
+  line-height: 0.98;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+.stage-services .svc-blurb {
+  font-size: clamp(14px, 1.02vw, 16px);
+  line-height: 1.5;
+  color: rgba(29, 35, 33, 0.8);
+  max-width: none;
+  margin: 0 0 14px;
+}
+.stage-services .svc-tags {
+  gap: 5px;
+}
+.stage-services .svc-tags .hud-tag {
+  color: var(--ink);
+  background: rgba(29, 35, 33, 0.05);
+}
+
+/* 01–11 as a transit line */
+.stage-services .svc-line {
+  --p: 0;
+  --dot: 26px;
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1.5px dashed var(--line-strong);
+}
+.stage-services .svc-line::before,
+.stage-services .svc-line::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--dot) / 2);
+  top: calc(14px + var(--dot) / 2 - 2px);
+  height: 4px;
+  border-radius: 4px;
+}
+.stage-services .svc-line::before {
+  right: calc(var(--dot) / 2);
+  background: rgba(29, 35, 33, 0.14);
+}
+.stage-services .svc-line::after {
+  width: calc((100% - var(--dot)) * var(--p));
+  background: var(--signal);
+  transition: width 0.6s cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+.stage-services .svc-stop {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    transform 0.35s cubic-bezier(0.3, 1.7, 0.5, 1),
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.stage-services .svc-stop span {
+  display: block;
+}
+.stage-services .svc-stop:hover {
+  transform: translateY(-2px);
+}
+.stage-services .svc-stop.is-past {
+  background: #c9f5de;
+}
+.stage-services .svc-stop.is-on {
+  background: var(--signal);
+  transform: scale(1.2);
+  box-shadow: 0 3px 0 #07a85d;
+}
+
+/* ---------------- map pins (overview) ---------------- */
+.stage-services .svc-pins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.stage-services .svc-pin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+}
+.stage-services .svc-pins.is-on .svc-pin.is-vis {
+  visibility: visible;
+}
+.stage-services .svc-pin b,
+.stage-services .svc-pin span {
+  position: absolute;
+  bottom: 10px;
+  opacity: 0;
+  transform: translate3d(-50%, 10px, 0) scale(0.5);
+  transform-origin: 50% 100%;
+  transition:
+    opacity 0.15s ease,
+    transform 0.2s ease;
+}
+.stage-services .svc-pin b {
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font: 700 10.5px/1 var(--font-mono);
+  color: var(--ink);
+}
+/* the teardrop map pin behind the number */
+.stage-services .svc-pin b::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50% 50% 50% 4px;
+  transform: rotate(-45deg);
+  background: var(--signal);
+  box-shadow:
+    -2px 2px 0 #07a85d,
+    var(--shadow);
+}
+.stage-services .svc-pin span {
+  left: 20px;
+  bottom: 14px;
+  transform: translate3d(0, 6px, 0) scale(0.7);
+  transform-origin: 0 100%;
+  white-space: nowrap;
+  font: 700 12px/1 var(--font-sans);
+  color: var(--ink);
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 5px 9px;
+  box-shadow: var(--shadow);
+}
+.stage-services .svc-pins.is-on .svc-pin b {
+  opacity: 1;
+  transform: translate3d(-50%, 0, 0) scale(1);
+  transition:
+    opacity 0.2s ease calc(var(--i) * 45ms + 0.1s),
+    transform 0.5s cubic-bezier(0.3, 1.7, 0.5, 1) calc(var(--i) * 45ms + 0.1s);
+}
+.stage-services .svc-pins.is-named .svc-pin span {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.2s ease calc(var(--i) * 40ms + 0.2s),
+    transform 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) calc(var(--i) * 40ms + 0.2s);
+}
+
+/* ---------------- shorter desktop windows ---------------- */
+@media (max-height: 780px) and (min-width: 768px) and (min-aspect-ratio: 4/5) {
+  .stage-services .svc-plate {
+    padding: 16px 20px 14px;
+  }
+  .stage-services .svc-head {
+    margin-bottom: 9px;
+    padding-bottom: 9px;
+  }
+  .stage-services .svc-title {
+    font-size: clamp(1.55rem, 2.2vw, 2.2rem);
+    margin-bottom: 8px;
+  }
+  .stage-services .svc-blurb {
+    font-size: 14px;
+    line-height: 1.45;
+    margin-bottom: 10px;
+  }
+  .stage-services .svc-line {
+    margin-top: 12px;
+    padding-top: 11px;
+  }
+  .stage-services .svc-line::before,
+  .stage-services .svc-line::after {
+    top: calc(11px + var(--dot) / 2 - 2px);
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 768px) and (min-aspect-ratio: 4/5) {
+  .stage-services {
+    --svc-w: min(380px, 38vw);
+  }
+  .stage-services .svc-line {
+    --dot: 24px;
+  }
+  .stage-services .svc-stop {
+    font-size: 9px;
+  }
+}
+
+/* ---------------- phones & portrait: the plate is a bottom sheet ---------------- */
+@media (max-width: 767px), (max-aspect-ratio: 4/5) {
+  .stage-services .svc-intro {
+    top: auto;
+    right: var(--gutter);
+    width: auto;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 18px 18px 16px;
+    border-radius: 20px;
+    background: rgba(251, 250, 246, 0.9);
+    box-shadow: var(--shadow);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+    transition:
+      opacity 0.2s ease,
+      transform 0.3s ease,
+      visibility 0s linear 0.3s;
+  }
+  .stage-services .svc-intro.is-on {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 0.25s ease,
+      transform 0.5s cubic-bezier(0.3, 1.5, 0.5, 1),
+      visibility 0s;
+  }
+  .stage-services .svc-intro-title {
+    font-size: clamp(2.3rem, 10.5vw, 4.2rem);
+  }
+  .stage-services .svc-col {
+    top: auto;
+    right: var(--gutter);
+    width: auto;
+    justify-content: flex-end;
+    transform: translate3d(0, 18px, 0);
+  }
+  .stage-services .svc-plate {
+    padding: 14px 16px 12px;
+    border-radius: 20px;
+  }
+  .stage-services .svc-screw {
+    display: none;
+  }
+  .stage-services .svc-slide:not(.is-on) {
+    position: static;
+  }
+  .stage-services .svc-head {
+    margin-bottom: 8px;
+    padding: 0 0 8px;
+  }
+  .stage-services .svc-title {
+    font-size: clamp(1.45rem, 6.8vw, 2.1rem);
+    margin-bottom: 7px;
+  }
+  .stage-services .svc-blurb {
+    font-size: 13.5px;
+    line-height: 1.42;
+    margin-bottom: 9px;
+  }
+  .stage-services .svc-tags .hud-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+  .stage-services .svc-line {
+    --dot: 24px;
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+  .stage-services .svc-line::before,
+  .stage-services .svc-line::after {
+    top: calc(10px + var(--dot) / 2 - 2px);
+  }
+  .stage-services .svc-stop {
+    font-size: 8.5px;
+    border-width: 1.5px;
+  }
+  .stage-services .svc-pin span {
+    display: none;
+  }
+  .stage-services .svc-pin b {
+    width: 24px;
+    height: 24px;
+    font-size: 9.5px;
+  }
+}
+
+@media (max-width: 767px) and (max-height: 700px) {
+  .stage-services .svc-blurb {
+    font-size: 13px;
+    line-height: 1.38;
+  }
+  .stage-services .svc-tags {
+    display: none;
+  }
+  .stage-services .svc-intro-title {
+    font-size: clamp(2.1rem, 9.5vw, 3rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-services .svc-hint-arrow {
+    animation: none;
+  }
+}

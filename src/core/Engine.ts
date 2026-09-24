@@ -390,10 +390,15 @@ export class Engine {
     // mobile URL bars change innerHeight constantly; only relayout the scroll
     // track on real changes so the page doesn't jump
     if (force || iw !== this.vw || Math.abs(ih - this.vh) > this.vh * 0.25) {
+      // keep the visitor at the same point of the story across a relayout
+      const progress = this.lenis && this.state.total > 0 ? this.lenis.scroll / (this.state.total * this.vh) : 0
       this.vw = iw
       this.vh = ih
       this.layoutTrack()
       this.lenis?.resize()
+      if (!force && this.lenis && progress > 0) {
+        this.lenis.scrollTo(progress * this.state.total * this.vh, { immediate: true, force: true })
+      }
     }
 
     const w = this.canvas.clientWidth || iw

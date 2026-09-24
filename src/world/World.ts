@@ -1,142 +1,125 @@
 import * as THREE from 'three'
 import type { Frame } from '../core/types'
+import { KIT, tickKit } from '../kit/anim'
+import { STORM, makeSkyMaterial, skyColor, skyScalar } from './sky'
+import { FarField, HAZE } from './far'
 
 /*
  * The shared sky for Hark Town — a miniature world floating in daylight.
  *
- *  - object: a camera-centred sky dome (soft zenith → warm horizon) with a
- *    sun glow; colours follow the time of day and a storm amount.
- *  - sun: one DirectionalLight that casts soft shadows. Its shadow frustum
- *    follows `params.focus` so whichever island is on screen gets crisp
- *    contact shadows without a huge shadow map.
- *  - hemi: sky/ground fill light.
+ *  - sky dome (camera-centred): zenith → horizon gradient with a sun glow
+ *    above the horizon and, below it, a soft stylised CLOUD SEA far beneath
+ *    the islands fading into warm haze — which is what the telephoto,
+ *    looking-down chapter cameras mostly see behind their island.
+ *  - far field: big soft clouds drifting below the islands and a few tiny
+ *    distant floating islands, wrapped around the camera and kept clear of
+ *    the island on screen (params.focus).
+ *  - sun: one DirectionalLight with soft PCF shadows whose frustum follows
+ *    params.focus (keep params.shadowSize tight). Its arc through the day is
+ *    art-directed for a camera on the +z side looking toward -z: morning
+ *    light from the front-left, noon high, golden hour from the front-right.
+ *    Rotate it with params.sunAzimuth, or lock it to the camera with
+ *    params.sunFollow.
+ *  - hemi: sky/ground fill (cool sky, warm ground bounce).
+ *  - drives the kit: KIT.uTime (flags, water, birds, spinners), KIT.uGlow
+ *    (windows + lamps glow from golden hour on, and in storms), rim tint.
  *
  * Chapters set `world.params` every frame they care (the engine resets them
  * to defaults first); values are damped so cuts never pop. The story runs
- * from morning (hero) to sunset (contact).
+ * from morning (hero) to sunset (contact). `world.tone` exposes the current
+ * sky colours (linear) for chapters that want to match them.
  */
 
 export interface WorldParams {
-  /** 0 dawn · 0.3 morning · 0.5 noon · 0.75 golden hour · 1 dusk */
+  /** 0 dawn · 0.3 morning · 0.5 noon · 0.75 golden hour · 0.9 sunset · 1 dusk */
   time: number
   /** 0..1 overcast/storm: darker, cooler, flatter light */
   storm: number
-  /** world-space point the shadow camera centres on */
+  /** world-space point the shadow camera centres on (your island centre) */
   focus: THREE.Vector3
   /** half-size of the shadow frustum (world units) */
   shadowSize: number
   /** multiplier on the sun */
   sun: number
+  /** extra sun azimuth in radians (rotates the light around +y) */
+  sunAzimuth: number
+  /** 0 = sun fixed in world space · 1 = sun azimuth follows the camera's orbit around focus */
+  sunFollow: number
+  /** 0..1 amount of background cloud field + far islands */
+  clouds: number
+  /** 0..1 cloud sea below */
+  sea: number
+  /** override for the evening lights (-1 = automatic from time/storm) */
+  glow: number
 }
 
-export const WORLD_DEFAULTS = { time: 0.35, storm: 0, shadowSize: 14, sun: 1 }
+export const WORLD_DEFAULTS = { time: 0.35, storm: 0, shadowSize: 14, sun: 1, sunAzimuth: 0, sunFollow: 0, clouds: 1, sea: 1, glow: -1 }
 
-const Z = {
-  dawn: new THREE.Color('#9fb7e0'),
-  day: new THREE.Color('#7fb8ea'),
-  gold: new THREE.Color('#8fa9d8'),
-  dusk: new THREE.Color('#42426e'),
-  storm: new THREE.Color('#5d6673'),
-}
-const H = {
-  dawn: new THREE.Color('#fbd9c4'),
-  day: new THREE.Color('#e9f2f4'),
-  gold: new THREE.Color('#ffd7a3'),
-  dusk: new THREE.Color('#f59a7a'),
-  storm: new THREE.Color('#9aa3ad'),
-}
-const SUNCOL = {
-  dawn: new THREE.Color('#ffd2b0'),
-  day: new THREE.Color('#fff6e8'),
-  gold: new THREE.Color('#ffc890'),
-  dusk: new THREE.Color('#ff9a6e'),
-}
-
-/** piecewise colour through the day */
-function dayColor(set: { dawn: THREE.Color; day: THREE.Color; gold: THREE.Color; dusk: THREE.Color }, t: number, out: THREE.Color) {
-  if (t < 0.3) return out.copy(set.dawn).lerp(set.day, t / 0.3)
-  if (t < 0.6) return out.copy(set.day)
-  if (t < 0.82) return out.copy(set.day).lerp(set.gold, (t - 0.6) / 0.22)
-  return out.copy(set.gold).lerp(set.dusk, (t - 0.82) / 0.18)
-}
+const WHITE = new THREE.Color('#ffffff')
+const GROUND = new THREE.Color('#d9c6a6')
+const GROUND_STORM = new THREE.Color('#6d6a66')
 
 export class World {
   object = new THREE.Group()
   sun: THREE.DirectionalLight
   hemi: THREE.HemisphereLight
   params: WorldParams = { ...WORLD_DEFAULTS, focus: new THREE.Vector3() }
-  private cur = { ...WORLD_DEFAULTS, focus: new THREE.Vector3() }
-  private uniforms = {
-    uZenith: { value: new THREE.Color() },
-    uHorizon: { value: new THREE.Color() },
-    uSunDir: { value: new THREE.Vector3(0, 1, 0) },
-    uSunCol: { value: new THREE.Color() },
-    uStorm: { value: 0 },
+  /** current sky colours (linear), updated every frame */
+  tone = {
+    zenith: new THREE.Color(),
+    horizon: new THREE.Color(),
+    sun: new THREE.Color(),
+    haze: new THREE.Color(),
   }
-  private sunDir = new THREE.Vector3()
+  /** current sun direction (unit, toward the sun) */
+  sunDir = new THREE.Vector3(0, 1, 0)
+  private cur = { ...WORLD_DEFAULTS, focus: new THREE.Vector3() }
+  private dome: THREE.Mesh
+  private sky: ReturnType<typeof makeSkyMaterial>
+  private far: FarField
   private shadowSize = -1
+  private first = true
+  private mapSize: number
 
   constructor(scene: THREE.Scene, mobile: boolean) {
-    const dome = new THREE.Mesh(
-      new THREE.SphereGeometry(900, 48, 24),
-      new THREE.ShaderMaterial({
-        side: THREE.BackSide,
-        depthWrite: false,
-        toneMapped: false,
-        uniforms: this.uniforms,
-        vertexShader: /* glsl */ `
-          varying vec3 vDir;
-          void main() {
-            vDir = normalize(position);
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: /* glsl */ `
-          uniform vec3 uZenith, uHorizon, uSunDir, uSunCol;
-          uniform float uStorm;
-          varying vec3 vDir;
-          float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
-          void main() {
-            vec3 d = normalize(vDir);
-            float h = clamp(d.y, -1.0, 1.0);
-            // warm horizon band, soft zenith; below the horizon fades to a hazy floor
-            vec3 c = mix(uHorizon, uZenith, smoothstep(0.0, 0.65, h));
-            c = mix(c, uHorizon * 0.92, smoothstep(0.0, -0.35, h));
-            float s = max(dot(d, normalize(uSunDir)), 0.0);
-            float glow = s * s * s * s * s * s * 0.35 + s * s * 0.08;
-            c += uSunCol * glow * (1.0 - uStorm * 0.8);
-            c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
-            gl_FragColor = vec4(c, 1.0);
-          }
-        `,
-      }),
-    )
-    dome.frustumCulled = false
-    dome.renderOrder = -10
-    this.object.add(dome)
+    this.sky = makeSkyMaterial(mobile)
+    this.dome = new THREE.Mesh(new THREE.SphereGeometry(900, 40, 20), this.sky.material)
+    this.dome.frustumCulled = false
+    this.dome.renderOrder = -10
+    this.object.add(this.dome)
+
+    this.far = new FarField(mobile)
+    this.object.add(this.far.object)
 
     this.sun = new THREE.DirectionalLight(0xffffff, 2.6)
     this.sun.castShadow = true
     const size = mobile ? 1024 : 2048
     this.sun.shadow.mapSize.set(size, size)
-    this.sun.shadow.bias = -0.0004
-    this.sun.shadow.normalBias = 0.025
+    this.sun.shadow.bias = -0.0005
+    this.sun.shadow.normalBias = 0.03
     this.sun.shadow.radius = 4
     this.sun.shadow.camera.near = 1
-    this.sun.shadow.camera.far = 160
+    this.sun.shadow.camera.far = 220
+    this.mapSize = size
     scene.add(this.sun)
     scene.add(this.sun.target)
 
-    this.hemi = new THREE.HemisphereLight(0xdfeeff, 0xc9b79c, 1.15)
+    this.hemi = new THREE.HemisphereLight(0xdfeeff, 0xd9c6a6, 1.15)
     scene.add(this.hemi)
   }
 
   resetParams() {
-    this.params.time = WORLD_DEFAULTS.time
-    this.params.storm = WORLD_DEFAULTS.storm
-    this.params.shadowSize = WORLD_DEFAULTS.shadowSize
-    this.params.sun = WORLD_DEFAULTS.sun
-    this.params.focus.set(0, 0, 0)
+    const p = this.params
+    p.time = WORLD_DEFAULTS.time
+    p.storm = WORLD_DEFAULTS.storm
+    p.shadowSize = WORLD_DEFAULTS.shadowSize
+    p.sun = WORLD_DEFAULTS.sun
+    p.sunAzimuth = WORLD_DEFAULTS.sunAzimuth
+    p.sunFollow = WORLD_DEFAULTS.sunFollow
+    p.clouds = WORLD_DEFAULTS.clouds
+    p.sea = WORLD_DEFAULTS.sea
+    p.glow = WORLD_DEFAULTS.glow
+    p.focus.set(0, 0, 0)
   }
 
   /** current (damped) time of day, 0..1 */
@@ -144,31 +127,68 @@ export class World {
     return this.cur.time
   }
 
+  /** current (damped) storm amount */
+  get storm() {
+    return this.cur.storm
+  }
+
   update(frame: Frame, camera: THREE.Camera) {
-    const k = 1 - Math.exp(-3.5 * frame.dt)
     const c = this.cur
     const p = this.params
+    if (this.first) {
+      // no fade-in from defaults on the very first frame
+      Object.assign(c, { ...p, focus: c.focus.copy(p.focus) })
+      this.first = false
+    }
+    const k = 1 - Math.exp(-3.5 * frame.dt)
     c.time += (p.time - c.time) * k
     c.storm += (p.storm - c.storm) * k
     c.shadowSize += (p.shadowSize - c.shadowSize) * k
     c.sun += (p.sun - c.sun) * k
+    c.sunAzimuth += (p.sunAzimuth - c.sunAzimuth) * k
+    c.sunFollow += (p.sunFollow - c.sunFollow) * k
+    c.clouds += (p.clouds - c.clouds) * k
+    c.sea += (p.sea - c.sea) * k
+    c.glow = p.glow < 0 ? -1 : c.glow < 0 ? p.glow : c.glow + (p.glow - c.glow) * k
     c.focus.lerp(p.focus, 1 - Math.exp(-8 * frame.dt))
 
-    const u = this.uniforms
-    dayColor(Z, c.time, u.uZenith.value).lerp(Z.storm, c.storm)
-    dayColor(H, c.time, u.uHorizon.value).lerp(H.storm, c.storm)
-    dayColor(SUNCOL, c.time, u.uSunCol.value)
-    u.uStorm.value = c.storm
+    tickKit(frame.time, frame.reducedMotion)
 
-    // sun arcs across the sky through the day
-    const el = Math.sin(Math.PI * (0.12 + 0.76 * c.time)) * 0.95 + 0.08
-    const az = -0.9 + c.time * 1.7
-    this.sunDir.set(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)).normalize()
+    // ---- palette
+    const t = c.time, st = c.storm
+    const u = this.sky.uniforms
+    skyColor('zenith', t, u.uZenith.value).lerp(STORM.zenith, st)
+    skyColor('horizon', t, u.uHorizon.value).lerp(STORM.horizon, st)
+    skyColor('sun', t, u.uSunCol.value).lerp(STORM.sun, st * 0.7)
+    skyColor('seaLit', t, u.uSeaLit.value).lerp(STORM.seaLit, st)
+    skyColor('seaShade', t, u.uSeaShade.value).lerp(STORM.seaShade, st)
+    skyColor('seaGap', t, u.uSeaGap.value).lerp(STORM.seaGap, st)
+    skyColor('haze', t, u.uHaze.value).lerp(STORM.haze, st)
+    u.uStorm.value = st
+    u.uTime.value = KIT.uTime.value
+    u.uCam.value.copy(camera.position)
+    u.uSea.value = c.sea
+    this.tone.zenith.copy(u.uZenith.value)
+    this.tone.horizon.copy(u.uHorizon.value)
+    this.tone.sun.copy(u.uSunCol.value)
+    this.tone.haze.copy(u.uHaze.value)
+    HAZE.uHaze.value.copy(u.uHaze.value)
+
+    // ---- sun: art-directed arc (+ optional azimuth offset / camera follow)
+    const el = THREE.MathUtils.degToRad(skyScalar('el', t))
+    let az = THREE.MathUtils.degToRad(skyScalar('az', t)) + c.sunAzimuth
+    if (c.sunFollow > 0.001) {
+      const camAz = Math.atan2(camera.position.x - c.focus.x, camera.position.z - c.focus.z)
+      az += camAz * c.sunFollow
+    }
+    this.sunDir.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).normalize()
     u.uSunDir.value.copy(this.sunDir)
 
-    this.sun.color.copy(u.uSunCol.value)
-    this.sun.intensity = 2.6 * c.sun * (1 - c.storm * 0.7) * THREE.MathUtils.smoothstep(this.sunDir.y, -0.05, 0.25)
-    this.sun.position.copy(c.focus).addScaledVector(this.sunDir, 60)
+    const power = skyScalar('power', t)
+    // surfaces take a softer version of the sky's sun colour (keeps sunset grass from going olive)
+    this.sun.color.copy(u.uSunCol.value).lerp(WHITE, 0.3)
+    this.sun.intensity = power * c.sun * (1 - st * 0.72)
+    this.sun.position.copy(c.focus).addScaledVector(this.sunDir, 80)
     this.sun.target.position.copy(c.focus)
     this.sun.target.updateMatrixWorld()
     if (Math.abs(c.shadowSize - this.shadowSize) > 0.05) {
@@ -179,11 +199,25 @@ export class World {
       cam.top = c.shadowSize
       cam.bottom = -c.shadowSize
       cam.updateProjectionMatrix()
+      // keep the penumbra ~constant in world units (soft toy shadows)
+      const texel = (2 * c.shadowSize) / this.mapSize
+      this.sun.shadow.radius = THREE.MathUtils.clamp(0.07 / texel, 2, 9)
     }
-    this.hemi.color.copy(u.uZenith.value).lerp(new THREE.Color('#ffffff'), 0.55)
-    this.hemi.groundColor.set('#c9b79c').lerp(new THREE.Color('#6d6a66'), c.storm)
-    this.hemi.intensity = 1.15 * (1 - c.storm * 0.3)
+    // cool sky fill, warm ground bounce; lavender shadows toward sunset
+    this.hemi.color.copy(u.uZenith.value).lerp(u.uHorizon.value, 0.35).lerp(WHITE, 0.45)
+    this.hemi.groundColor.copy(GROUND).lerp(u.uHorizon.value, 0.25).lerp(GROUND_STORM, st)
+    this.hemi.intensity = (1.05 + (1 - Math.min(1, power / 2.6)) * 0.35) * (1 - st * 0.3)
 
-    this.object.position.copy(camera.position)
+    // ---- kit tints
+    KIT.uRim.value.copy(u.uHorizon.value).lerp(u.uZenith.value, 0.25)
+    KIT.uRimStrength.value = 0.14 * (1 - st * 0.5)
+    KIT.uWind.value = 1 + st * 1.6
+    KIT.uCloudLift.value.copy(u.uHorizon.value).lerp(WHITE, 0.45).multiplyScalar(0.3 * (1 - st * 0.55))
+    const autoGlow = Math.min(1, THREE.MathUtils.smoothstep(t, 0.74, 0.93) + st * 0.65)
+    KIT.uGlow.value = c.glow < 0 ? autoGlow : c.glow
+
+    // ---- dome + far field
+    this.dome.position.copy(camera.position)
+    this.far.update(KIT.uTime.value, camera.position, c.focus, c.clouds)
   }
 }

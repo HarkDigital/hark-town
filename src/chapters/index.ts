@@ -10,6 +10,6 @@ export const CHAPTERS: ChapterDef[] = [
   { id: 'services', label: 'The Works', length: 4.0, landing: 0.08, load: () => import('./services/index') },
   { id: 'voices', label: 'Town Square', length: 3.0, landing: 0.06, load: () => import('./voices/index') },
   { id: 'shield', label: 'The Storm', length: 1.7, landing: 0.45, load: () => import('./shield/index') },
-  { id: 'process', label: 'Building Site', length: 1.9, landing: 0.19, load: () => import('./process/index') },
+  { id: 'process', label: 'Building Site', length: 2.2, landing: 0.17, load: () => import('./process/index') },
   { id: 'contact', label: 'Lighthouse', length: 1.5, landing: 0.3, load: () => import('./contact/index') },
 ]

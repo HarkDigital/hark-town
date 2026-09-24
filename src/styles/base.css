@@ -10,6 +10,7 @@
 :root {
   --sky: #e9f2f4;
   --paper: #fbfaf6;
+  --paper-2: #fbfaf6;
   --cream: #f6f1e7;
   --ink: #1d2321;
   --slate: #4b5563;
@@ -171,7 +172,7 @@ a {
 #loader {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 130;
 }
 
 .sr-only {

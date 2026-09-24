@@ -1,0 +1,263 @@
+/* The Storm — "Hacked? Breathe." (scoped to .stage-shield) */
+
+.stage-shield .shd {
+  position: absolute;
+  inset: 0;
+}
+
+.stage-shield .shd-probe {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  top: var(--safe-top);
+  bottom: var(--safe-bottom);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.stage-shield .shd-copy {
+  position: absolute;
+  left: var(--gutter);
+  top: calc(var(--safe-top) + 1.5vh);
+  width: min(540px, 40vw);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+/* eyebrow sits on its own little signage pill so it reads over any sky */
+.stage-shield .shd-eyebrow {
+  max-width: 100%;
+  padding: 7px 14px 7px 11px;
+  border-radius: 999px;
+  background: var(--plate);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  line-height: 1.35;
+  transition:
+    background-color 0.9s ease,
+    color 0.9s ease;
+}
+
+.stage-shield .shd-title {
+  font-size: clamp(3rem, 6.6vw, 6.8rem);
+  line-height: 0.9;
+  margin: 2px 0 4px;
+  transition:
+    color 0.9s ease,
+    text-shadow 0.9s ease;
+}
+.stage-shield .shd-title em {
+  transition: color 0.9s ease;
+}
+.stage-shield .shd-line {
+  display: block;
+}
+.stage-shield.is-dark .shd-title {
+  text-shadow: 0 2px 22px rgba(20, 24, 30, 0.35);
+}
+
+/* the body card and the 24/7 card swap in the same slot */
+.stage-shield .shd-swap {
+  display: grid;
+  width: 100%;
+}
+.stage-shield .shd-swap > * {
+  grid-area: 1 / 1;
+  align-self: start;
+}
+
+.stage-shield .shd-card {
+  max-width: 470px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate3d(0, 18px, 0) scale(0.92);
+  transform-origin: 14% 0%;
+  transition:
+    transform 0.26s ease,
+    opacity 0.2s ease,
+    visibility 0s linear 0.26s,
+    background-color 0.9s ease;
+}
+.stage-shield .shd-card.is-in {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    transform 0.62s cubic-bezier(0.34, 1.56, 0.5, 1),
+    opacity 0.22s ease,
+    visibility 0s linear 0s,
+    background-color 0.9s ease;
+}
+
+.stage-shield .shd-body .hud-body {
+  max-width: 42ch;
+}
+
+.stage-shield .shd-watch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+.stage-shield .shd-stat {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.stage-shield .shd-num {
+  flex: none;
+  font-family: var(--font-display);
+  font-weight: 640;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1, 'opsz' 144;
+  font-size: clamp(2.8rem, 4.4vw, 4.3rem);
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  color: var(--fg);
+  padding: 2px 0 6px;
+  background: linear-gradient(transparent 72%, rgba(0, 226, 122, 0.45) 72%, rgba(0, 226, 122, 0.45) 92%, transparent 92%);
+}
+.stage-shield .shd-stat-label {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: clamp(14px, 1.05vw, 15.5px);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--fg-muted);
+  max-width: 30ch;
+}
+
+/* callouts: the red alert slug, the green shield tag */
+.stage-shield .shd-alert .callout-dot {
+  background: #ff4b3e;
+  box-shadow:
+    0 0 0 3px var(--paper),
+    0 0 0 7px rgba(255, 75, 62, 0.35);
+  animation: shd-blink 0.55s ease-in-out infinite alternate;
+}
+.stage-shield .shd-alert .callout-svg path {
+  stroke: #ff6b5e;
+  stroke-opacity: 0.95;
+}
+.stage-shield .shd-alert .callout-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #c42d25;
+  padding: 5px 12px 5px 10px;
+}
+.stage-shield .shd-alert .callout-label::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 7px;
+  vertical-align: -1px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid #fff;
+}
+.stage-shield .shd-tag .callout-label {
+  color: var(--ink);
+  background: var(--paper);
+}
+.stage-shield .shd-tag .callout-label::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 2px rgba(0, 226, 122, 0.3);
+}
+
+@keyframes shd-blink {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+
+/* ---------------------------------------------------------------- portrait:
+   the island floats in the upper part, the copy stacks below it */
+@media (max-aspect-ratio: 21/25) {
+  .stage-shield .shd-copy {
+    top: auto;
+    bottom: calc(var(--safe-bottom) + 6px);
+    right: var(--gutter);
+    width: auto;
+    gap: 10px;
+  }
+  .stage-shield .shd-title {
+    font-size: clamp(2.5rem, 11.4vw, 5.4rem);
+    margin: 0;
+  }
+  .stage-shield .shd-eyebrow {
+    font-size: clamp(9.5px, 2.65vw, 11.5px);
+    letter-spacing: 0.035em;
+    gap: 7px;
+    white-space: nowrap;
+  }
+  .stage-shield .shd-card {
+    max-width: 560px;
+    padding: 16px 18px;
+  }
+  .stage-shield .shd-body .hud-body {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .stage-shield .shd-watch {
+    gap: 12px;
+  }
+  .stage-shield .shd-stat {
+    gap: 14px;
+  }
+  .stage-shield .shd-num {
+    font-size: clamp(2.4rem, 10vw, 3.6rem);
+  }
+  .stage-shield .shd-stat-label {
+    font-size: 14px;
+  }
+}
+
+/* short phones: headline on one line, tighter card */
+@media (max-aspect-ratio: 21/25) and (max-height: 720px) {
+  .stage-shield .shd-title {
+    font-size: clamp(2.1rem, 9.4vw, 3rem);
+  }
+  .stage-shield .shd-line {
+    display: inline;
+  }
+  .stage-shield .shd-line + .shd-line {
+    margin-left: 0.24em;
+  }
+  .stage-shield .shd-card {
+    padding: 13px 15px;
+  }
+  .stage-shield .shd-body .hud-body {
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .stage-shield .shd-stat-label {
+    font-size: 13px;
+  }
+  .stage-shield .shd-cta {
+    padding: 11px 18px;
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-shield .shd-alert .callout-dot {
+    animation: none;
+  }
+}

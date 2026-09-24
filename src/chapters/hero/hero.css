@@ -1,0 +1,265 @@
+/* ------------------------------------------------------------------
+   HERO — "HQ" · the island where the town builds itself
+   ------------------------------------------------------------------ */
+
+.stage-hero .hero-root {
+  position: absolute;
+  inset: 0;
+}
+.stage-hero .hero-probe {
+  position: absolute;
+  top: var(--safe-top);
+  bottom: var(--safe-bottom);
+  left: var(--gutter);
+  right: var(--gutter);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* springy pop used by the plates */
+.stage-hero .hero-welcome,
+.stage-hero .hero-sign,
+.stage-hero .hero-hint {
+  opacity: 0;
+  transform: translate3d(0, 16px, 0) scale(0.94);
+  transition:
+    transform 0.34s cubic-bezier(0.5, 0, 0.75, 0),
+    opacity 0.24s ease;
+}
+.stage-hero .hero-welcome.is-in,
+.stage-hero .hero-sign.is-in,
+.stage-hero .hero-hint.is-in {
+  opacity: 1;
+  transform: none;
+  transition:
+    transform 0.72s cubic-bezier(0.34, 1.56, 0.5, 1),
+    opacity 0.3s ease;
+}
+
+/* ---------- opening: welcome plate + scroll hint (left column) ---------- */
+.stage-hero .hero-dock {
+  position: absolute;
+  left: var(--gutter);
+  top: var(--safe-top);
+  bottom: var(--safe-bottom);
+  width: min(400px, 34vw);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 14px;
+}
+.stage-hero .hero-welcome {
+  padding: 20px 24px 18px;
+  transform-origin: 30% 100%;
+}
+.stage-hero .hero-welcome__title {
+  font-family: var(--font-display);
+  font-weight: 620;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1, 'opsz' 72;
+  font-size: clamp(26px, 2.5vw, 36px);
+  line-height: 1.02;
+  letter-spacing: -0.022em;
+  margin: 12px 0 10px;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.stage-hero .hero-welcome__body {
+  color: var(--fg-muted);
+  font-size: clamp(15px, 1.1vw, 16.5px);
+  line-height: 1.5;
+}
+.stage-hero .hero-welcome__where {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1.5px dashed var(--line-strong);
+  color: var(--fg-muted);
+}
+
+.stage-hero .hero-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px 7px 7px;
+  border-radius: 999px;
+  background: var(--plate);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  transform-origin: 20% 50%;
+}
+.stage-hero .hero-hint.is-in {
+  transition-delay: 0.12s;
+}
+.stage-hero .hero-hint__arrow {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--signal);
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 rgba(7, 168, 93, 0.9);
+}
+.stage-hero .hero-hint__arrow svg {
+  width: 12px;
+  height: 15px;
+  animation: hero-bob 1.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes hero-bob {
+  0%,
+  100% {
+    transform: translate3d(0, -2px, 0);
+  }
+  50% {
+    transform: translate3d(0, 3px, 0);
+  }
+}
+
+/* ---------- while the town builds: the town sign ---------- */
+.stage-hero .hero-sign {
+  position: absolute;
+  left: var(--gutter);
+  bottom: var(--safe-bottom);
+  padding: 16px 20px 14px;
+  min-width: 180px;
+  border-top: 5px solid var(--signal);
+  transform-origin: 50% 100%;
+}
+.stage-hero .hero-sign__pop {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 8px 0 2px;
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100, 'WONK' 1, 'opsz' 72;
+  line-height: 1;
+  color: var(--ink);
+}
+.stage-hero .hero-sign__k {
+  font-size: 20px;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--fg-muted);
+}
+.stage-hero .hero-sign__n {
+  display: inline-block;
+  font-size: 44px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  transform-origin: 30% 90%;
+}
+.stage-hero .hero-sign__est {
+  margin: 4px 0 0;
+}
+
+/* ---------- payoff: headline + CTAs on clean sky ---------- */
+.stage-hero .hero-pay {
+  position: absolute;
+  left: var(--gutter);
+  top: calc(var(--safe-top) + 2vh);
+  width: min(52vw, 760px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: clamp(22px, 3.4vh, 34px);
+}
+.stage-hero .hero-title {
+  font-size: clamp(3.1rem, 7.2vw, 7.6rem);
+  line-height: 0.9;
+}
+.stage-hero .hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  opacity: 0;
+  transform: translate3d(0, 12px, 0);
+  visibility: hidden;
+  transition:
+    opacity 0.25s ease,
+    transform 0.3s ease,
+    visibility 0s linear 0.3s;
+}
+.stage-hero .hero-pay.is-in .hero-ctas {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition:
+    opacity 0.35s ease 0.28s,
+    transform 0.6s cubic-bezier(0.34, 1.56, 0.5, 1) 0.28s,
+    visibility 0s;
+}
+
+/* ---------- portrait: island up top, signage below ---------- */
+.stage-hero .is-port .hero-dock {
+  top: auto;
+  right: var(--gutter);
+  width: auto;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.stage-hero .is-port .hero-welcome {
+  padding: 16px 18px 14px;
+  width: 100%;
+}
+.stage-hero .is-port .hero-welcome__title {
+  font-size: 25px;
+  margin: 10px 0 8px;
+}
+.stage-hero .is-port .hero-welcome__body {
+  font-size: 15px;
+  line-height: 1.45;
+  max-width: none;
+}
+.stage-hero .is-port .hero-pay {
+  top: auto;
+  bottom: var(--safe-bottom);
+  right: var(--gutter);
+  width: auto;
+  gap: 18px;
+}
+.stage-hero .is-port .hero-title {
+  font-size: clamp(2.7rem, 12.4vw, 5.4rem);
+}
+.stage-hero .is-port .hero-sign {
+  padding: 12px 16px 11px;
+  min-width: 0;
+}
+.stage-hero .is-port .hero-sign__n {
+  font-size: 34px;
+}
+
+@media (max-height: 700px) {
+  .stage-hero .hero-welcome__where {
+    display: none;
+  }
+  .stage-hero .is-port .hero-welcome__title {
+    font-size: 22px;
+  }
+  .stage-hero .is-port .hero-welcome__body {
+    font-size: 14px;
+  }
+  .stage-hero .hero-dock {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 380px) {
+  .stage-hero .hero-ctas .hud-btn {
+    padding: 12px 17px;
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-hero .hero-hint__arrow svg {
+    animation: none;
+  }
+}

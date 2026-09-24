@@ -1,0 +1,453 @@
+/* ------------------------------------------------------------------
+   Lighthouse (contact). A dark enamel signage plate at dusk: the
+   address is the big green button, then copy, the sister sites and
+   the colophon. Landscape: plate on the left, island on the right.
+   Portrait: island on top, plate below. JS toggles .ct-portrait and
+   the .ct-fit-* compaction steps (same measurement as the 3D fit).
+   ------------------------------------------------------------------ */
+
+.stage-contact {
+  --plate: rgba(25, 24, 42, 0.8);
+  --ct-ease: cubic-bezier(0.34, 1.56, 0.5, 1);
+}
+
+.stage-contact .ct-probe {
+  position: absolute;
+  top: var(--safe-top);
+  bottom: var(--safe-bottom);
+  left: var(--gutter);
+  right: var(--gutter);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.stage-contact .ct-col {
+  position: absolute;
+  left: var(--gutter);
+  top: var(--safe-top);
+  bottom: var(--safe-bottom);
+  width: clamp(330px, 35vw, 520px);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+.stage-contact .ct-slot {
+  width: 100%;
+}
+
+/* ---- the plate: pops up like a sign on a spring ---- */
+.stage-contact .ct-plate {
+  padding: clamp(22px, 2.3vw, 34px) clamp(22px, 2.5vw, 38px) clamp(20px, 2.1vw, 30px);
+  border-radius: 26px;
+  box-shadow:
+    0 18px 50px rgba(14, 10, 34, 0.34),
+    0 3px 10px rgba(14, 10, 34, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate3d(0, 34px, 0) scale(0.9);
+  transform-origin: 50% 100%;
+  transition:
+    transform 0.72s var(--ct-ease),
+    opacity 0.26s ease,
+    visibility 0s linear 0.4s;
+}
+.stage-contact .ct-plate.is-in {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+/* the sign's inner border + four screws */
+.stage-contact .ct-plate::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 19px;
+  border: 1px solid rgba(251, 250, 246, 0.1);
+  pointer-events: none;
+}
+.stage-contact .ct-screw {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(251, 250, 246, 0.5), rgba(251, 250, 246, 0.16) 70%);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.stage-contact .ct-screw::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 3px;
+  height: 1px;
+  background: rgba(20, 18, 34, 0.55);
+  transform: rotate(-35deg);
+}
+.stage-contact .ct-screw--tl {
+  left: 15px;
+  top: 15px;
+}
+.stage-contact .ct-screw--tr {
+  right: 15px;
+  top: 15px;
+}
+.stage-contact .ct-screw--bl {
+  left: 15px;
+  bottom: 15px;
+}
+.stage-contact .ct-screw--br {
+  right: 15px;
+  bottom: 15px;
+}
+
+.stage-contact .ct-title {
+  font-size: clamp(2.7rem, min(5.3vw, 9.8vh), 5.8rem);
+  margin: 12px 0 14px;
+  white-space: nowrap;
+}
+.stage-contact .ct-body {
+  max-width: 36ch;
+}
+
+/* ---- the address: the primary link ---- */
+.stage-contact .ct-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: clamp(16px, 2.4vh, 24px);
+}
+.stage-contact .ct-mail {
+  font-size: clamp(15.5px, 1.32vw, 19px);
+  padding: 15px 22px 15px 18px;
+  min-height: 52px;
+  white-space: nowrap;
+  letter-spacing: -0.005em;
+  box-shadow:
+    0 4px 0 #07a85d,
+    0 10px 28px rgba(0, 226, 122, 0.28),
+    0 2px 6px rgba(10, 8, 30, 0.3);
+}
+.stage-contact .ct-mail:hover,
+.stage-contact .ct-mail:focus-visible {
+  box-shadow:
+    0 6px 0 #07a85d,
+    0 14px 34px rgba(0, 226, 122, 0.4),
+    0 2px 6px rgba(10, 8, 30, 0.3);
+}
+.stage-contact .ct-mail:active {
+  box-shadow:
+    0 1px 0 #07a85d,
+    0 6px 18px rgba(0, 226, 122, 0.3);
+}
+.stage-contact .ct-ico {
+  width: 1.3em;
+  height: 1.3em;
+  flex: none;
+}
+.stage-contact .ct-mail-go {
+  display: inline-block;
+  transition: transform 0.22s var(--ct-ease);
+}
+.stage-contact .ct-mail:hover .ct-mail-go,
+.stage-contact .ct-mail:focus-visible .ct-mail-go {
+  transform: translate3d(4px, 0, 0);
+}
+
+.stage-contact .ct-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(251, 250, 246, 0.36);
+  background: rgba(251, 250, 246, 0.06);
+  color: var(--paper);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    background-color 0.18s ease,
+    transform 0.18s var(--ct-ease);
+}
+.stage-contact .ct-copy:hover,
+.stage-contact .ct-copy:focus-visible {
+  border-color: var(--signal);
+  color: var(--signal-bright);
+  transform: translateY(-1px);
+}
+.stage-contact .ct-copy:active {
+  transform: translateY(1px);
+}
+.stage-contact .ct-copy-done,
+.stage-contact .ct-copy-fail {
+  display: none;
+}
+.stage-contact .ct-copy.is-copied,
+.stage-contact .ct-copy.is-failed {
+  border-color: var(--signal);
+  color: var(--signal-bright);
+  background: rgba(0, 226, 122, 0.12);
+}
+.stage-contact .ct-copy.is-copied .ct-copy-idle,
+.stage-contact .ct-copy.is-failed .ct-copy-idle {
+  display: none;
+}
+.stage-contact .ct-copy.is-copied .ct-copy-done {
+  display: inline;
+}
+.stage-contact .ct-copy.is-copied .ct-copy-done::after {
+  content: ' ✓';
+}
+.stage-contact .ct-copy.is-failed .ct-copy-fail {
+  display: inline;
+}
+
+/* ---- elsewhere: the sister sites + back to top ---- */
+.stage-contact .ct-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 16px;
+  margin-top: clamp(16px, 2.2vh, 22px);
+  padding-top: clamp(10px, 1.6vh, 14px);
+  border-top: 1px solid var(--line);
+}
+.stage-contact .ct-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--paper);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+  text-decoration-color: rgba(251, 250, 246, 0.32);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    text-decoration-color 0.15s ease;
+}
+.stage-contact .ct-link:hover,
+.stage-contact .ct-link:focus-visible {
+  color: var(--signal-bright);
+  text-decoration-color: var(--signal);
+}
+.stage-contact .ct-arr {
+  font-size: 0.92em;
+  text-decoration: none;
+  display: inline-block;
+}
+
+/* ---- colophon ---- */
+.stage-contact .ct-foot {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  line-height: 1.6;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+.stage-contact .ct-nw {
+  white-space: nowrap;
+}
+
+/* ---- staggered pop-ins inside the plate ---- */
+.stage-contact .ct-in {
+  opacity: 0;
+  visibility: hidden;
+  transform: translate3d(0, 12px, 0) scale(0.97);
+  transform-origin: 0 100%;
+  transition:
+    opacity 0.2s ease,
+    transform 0.5s var(--ct-ease),
+    visibility 0s linear 0.3s;
+}
+.stage-contact .ct-in.is-in {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+
+/* ---- the sign-off: floats in the dusk sky at the very end ---- */
+.stage-contact .ct-night {
+  position: absolute;
+  left: 50%;
+  top: var(--safe-top);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 520;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1, 'opsz' 36;
+  font-size: clamp(17px, 1.55vw, 23px);
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+  color: var(--paper);
+  text-shadow: 0 1px 16px rgba(18, 14, 42, 0.7);
+}
+.stage-contact .ct-moon {
+  width: 1.15em;
+  height: 1.15em;
+  color: #ffe6b3;
+  filter: drop-shadow(0 0 6px rgba(255, 220, 160, 0.75));
+  opacity: 0;
+  transform: scale(0.4) rotate(-40deg);
+  transition:
+    transform 0.7s var(--ct-ease),
+    opacity 0.3s ease;
+}
+.stage-contact .ct-night.is-in .ct-moon {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- portrait: island on top, plate below ---- */
+.stage-contact.ct-portrait .ct-col {
+  right: var(--gutter);
+  width: auto;
+  align-items: flex-end;
+  justify-content: center;
+}
+.stage-contact.ct-portrait .ct-slot {
+  max-width: 560px;
+}
+.stage-contact.ct-portrait .ct-plate {
+  padding: 22px 22px 18px;
+  border-radius: 22px;
+}
+.stage-contact.ct-portrait .ct-title {
+  font-size: clamp(2.6rem, min(11vw, 7vh), 4.4rem);
+  margin: 8px 0 10px;
+}
+.stage-contact.ct-portrait .ct-body {
+  font-size: 15px;
+  max-width: 44ch;
+}
+.stage-contact.ct-portrait .ct-cta {
+  margin-top: 16px;
+}
+.stage-contact.ct-portrait .ct-mail {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+.stage-contact.ct-portrait .ct-links {
+  margin-top: 14px;
+  padding-top: 10px;
+  gap: 0 14px;
+}
+.stage-contact.ct-portrait .ct-plate::after {
+  inset: 6px;
+  border-radius: 17px;
+}
+.stage-contact.ct-portrait .ct-screw--tl,
+.stage-contact.ct-portrait .ct-screw--bl {
+  left: 11px;
+}
+.stage-contact.ct-portrait .ct-screw--tr,
+.stage-contact.ct-portrait .ct-screw--br {
+  right: 11px;
+}
+.stage-contact.ct-portrait .ct-screw--tl,
+.stage-contact.ct-portrait .ct-screw--tr {
+  top: 11px;
+}
+.stage-contact.ct-portrait .ct-screw--bl,
+.stage-contact.ct-portrait .ct-screw--br {
+  bottom: 11px;
+}
+
+/* ---- compaction steps for short viewports (JS adds them in order) ---- */
+.stage-contact.ct-fit-1 .ct-title {
+  font-size: clamp(2.3rem, min(4.4vw, 8vh), 4.4rem);
+  margin: 8px 0 10px;
+}
+.stage-contact.ct-fit-1 .ct-cta {
+  margin-top: 14px;
+}
+.stage-contact.ct-fit-1 .ct-links {
+  margin-top: 12px;
+  padding-top: 8px;
+}
+.stage-contact.ct-fit-2 .ct-plate {
+  padding: 18px 20px 16px;
+}
+.stage-contact.ct-fit-2 .ct-body {
+  font-size: 14px;
+  line-height: 1.45;
+}
+.stage-contact.ct-fit-2 .ct-mail {
+  min-height: 46px;
+  padding: 12px 18px 12px 15px;
+}
+.stage-contact.ct-fit-2 .ct-copy {
+  min-height: 44px;
+  padding: 0 15px;
+}
+.stage-contact.ct-fit-2 .ct-link {
+  min-height: 28px;
+  font-size: 12.5px;
+}
+.stage-contact.ct-fit-2 .ct-foot {
+  margin-top: 6px;
+  font-size: 9.5px;
+  line-height: 1.5;
+}
+.stage-contact.ct-fit-3 .ct-title {
+  font-size: clamp(2rem, min(3.8vw, 7vh), 3.4rem);
+  margin: 6px 0 8px;
+}
+.stage-contact.ct-fit-3 .ct-cta {
+  margin-top: 12px;
+  gap: 8px;
+}
+.stage-contact.ct-fit-3 .ct-links {
+  gap: 0 12px;
+  margin-top: 10px;
+  padding-top: 6px;
+}
+.stage-contact.ct-portrait.ct-fit-3 .ct-cta {
+  flex-wrap: nowrap;
+}
+.stage-contact.ct-portrait.ct-fit-3 .ct-mail {
+  font-size: 14.5px;
+  padding: 12px 14px;
+  gap: 8px;
+  min-width: 0;
+}
+.stage-contact.ct-portrait.ct-fit-3 .ct-copy {
+  flex: none;
+  padding: 0 14px;
+}
+.stage-contact.ct-portrait.ct-fit-3 .ct-copy-more {
+  display: none;
+}
+.stage-contact.ct-fit-4 .ct-body {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.stage-contact.ct-fit-4 .ct-title {
+  font-size: 1.9rem;
+}
+.stage-contact.ct-fit-4 .ct-eyebrow {
+  font-size: 10.5px;
+}
